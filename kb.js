@@ -494,7 +494,7 @@
       fab.textContent = '';
       fab.appendChild(document.createTextNode('Onay bekleyenler'));
       fab.appendChild(h('b', { text: String(n) }));
-      fab.className = 'kbx-fab' + (n ? '' : ' idle');
+      fab.className = 'kbx kbx-fab' + (n ? '' : ' idle');
       fab.setAttribute('aria-label', 'Onay bekleyenler: ' + n);
     }
     drawFab(0);
