@@ -245,6 +245,7 @@
     ready: ready,
     hasNoAccess: function () { return noAccess; },
     isDark: function () { return theme === 'dark'; },
+    isUsernameAccount: function () { return !!(session && usernameOf(rawEmail())); },
     toggleTheme: function () {
       theme = theme === 'dark' ? 'light' : 'dark';
       try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
