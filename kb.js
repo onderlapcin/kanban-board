@@ -343,7 +343,7 @@
     var m = String((e && (e.message || e.error_description)) || e || '');
     if (/already registered|already exists/i.test(m)) return 'Bu kullanıcı adı alınmış. Başka bir ad dene ya da giriş yap.';
     if (/invalid login credentials/i.test(m)) return 'Kullanıcı adı veya şifre hatalı.';
-    if (/password/i.test(m) && /least|short|weak/i.test(m)) return 'Şifre en az 5 karakter olmalı.';
+    if (/password/i.test(m) && /least|short|weak/i.test(m)) return 'Şifre en az 6 karakter olmalı.';
     if (/rate limit|too many/i.test(m)) return 'Çok fazla deneme yapıldı. Biraz bekleyip tekrar dene.';
     if (/signups? not allowed|disabled/i.test(m)) return 'Yeni kayıtlar şu an kapalı.';
     return m || 'Bir hata oluştu, tekrar dene.';
@@ -360,7 +360,7 @@
     var pIn = h('input', { type: 'password', autocomplete: 'current-password', maxlength: '72' });
     var p2In = h('input', { type: 'password', autocomplete: 'new-password', maxlength: '72' });
     var p2Wrap = h('div', { class: 'kbx-form', style: 'display:none' }, [h('label', { text: 'Şifre (tekrar)' }), p2In]);
-    var hint = h('div', { class: 'kbx-hint', style: 'display:none', text: 'Kullanıcı adı: 3–30 karakter; küçük harf, rakam, nokta, tire veya alt çizgi. Şifre en az 5 karakter (harf, rakam veya sembol fark etmez). Kaydın, yönetici onaylayınca etkinleşir.' });
+    var hint = h('div', { class: 'kbx-hint', style: 'display:none', text: 'Kullanıcı adı: 3–30 karakter; küçük harf, rakam, nokta, tire veya alt çizgi. Şifre en az 6 karakter (harf, rakam veya sembol fark etmez). Kaydın, yönetici onaylayınca etkinleşir.' });
     var submit = h('button', { class: 'kbx-btn pri', type: 'submit', text: 'Giriş yap' });
     var tIn = h('button', { type: 'button', class: 'on', text: 'Giriş yap' });
     var tUp = h('button', { type: 'button', text: 'Kayıt ol' });
@@ -382,19 +382,17 @@
       ev.preventDefault(); err.textContent = '';
       var un = uIn.value.trim().toLowerCase(), pw = pIn.value;
       if (!UNAME_RE.test(un)) { err.textContent = 'Kullanıcı adı 3–30 karakter olmalı; küçük harf, rakam, nokta, tire veya alt çizgi içerebilir.'; return; }
-      if (pw.length < 5) { err.textContent = 'Şifre en az 5 karakter olmalı.'; return; }
-      // Supabase en az 6 karakter kabul ediyor; 5 karakterlik şifrelere sabit bir ek eklenerek gönderilir
-      var spw = pw.length < 6 ? pw + '.kb5' : pw;
+      if (pw.length < 6) { err.textContent = 'Şifre en az 6 karakter olmalı.'; return; }
       if (mode === 'up' && pw !== p2In.value) { err.textContent = 'Şifreler eşleşmiyor.'; return; }
       var c = client(); if (!c) { err.textContent = 'Board henüz yapılandırılmadı.'; return; }
       submit.disabled = true; submit.textContent = mode === 'up' ? 'Kaydediliyor…' : 'Giriş yapılıyor…';
       try {
         var em = un + '@' + USER_DOMAIN, r;
         if (mode === 'up') {
-          r = await c.auth.signUp({ email: em, password: spw, options: { data: { username: un } } });
-          if (!r.error && r.data && !r.data.session) r = await c.auth.signInWithPassword({ email: em, password: spw });
+          r = await c.auth.signUp({ email: em, password: pw, options: { data: { username: un } } });
+          if (!r.error && r.data && !r.data.session) r = await c.auth.signInWithPassword({ email: em, password: pw });
         } else {
-          r = await c.auth.signInWithPassword({ email: em, password: spw });
+          r = await c.auth.signInWithPassword({ email: em, password: pw });
         }
         if (r.error) throw r.error;
         location.reload();
