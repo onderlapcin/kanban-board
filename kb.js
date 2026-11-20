@@ -245,6 +245,12 @@
     ready: ready,
     hasNoAccess: function () { return noAccess; },
     isDark: function () { return theme === 'dark'; },
+    isSideHidden: function () { try { return localStorage.getItem('kb-side') === 'hidden'; } catch (e) { return false; } },
+    toggleSide: function () {
+      var hide = !window.__kb.isSideHidden();
+      try { localStorage.setItem('kb-side', hide ? 'hidden' : 'shown'); } catch (e) {}
+      return hide;
+    },
     isUsernameAccount: function () { return !!(session && usernameOf(rawEmail())); },
     toggleTheme: function () {
       theme = theme === 'dark' ? 'light' : 'dark';
