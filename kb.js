@@ -360,7 +360,7 @@
     var pIn = h('input', { type: 'password', autocomplete: 'current-password', maxlength: '72' });
     var p2In = h('input', { type: 'password', autocomplete: 'new-password', maxlength: '72' });
     var p2Wrap = h('div', { class: 'kbx-form', style: 'display:none' }, [h('label', { text: 'Şifre (tekrar)' }), p2In]);
-    var hint = h('div', { class: 'kbx-hint', style: 'display:none', text: 'Kullanıcı adı: 3–30 karakter; küçük harf, rakam, nokta, tire veya alt çizgi. Şifre en az 6 karakter olmalıdır (harf, rakam veya sembol fark etmez). Kaydın, yönetici onaylayınca etkinleşir.' });
+    var hint = h('div', { class: 'kbx-hint', style: 'display:none', text: 'Şifre en az 6 karakter olmalıdır (harf, rakam veya sembol fark etmez). Kaydın, yönetici onaylayınca etkinleşir.' });
     var submit = h('button', { class: 'kbx-btn pri', type: 'submit', text: 'Giriş yap' });
     var tIn = h('button', { type: 'button', class: 'on', text: 'Giriş yap' });
     var tUp = h('button', { type: 'button', text: 'Kayıt ol' });
