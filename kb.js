@@ -267,6 +267,7 @@
     '.kbx-who{flex:1;min-width:140px;display:flex;flex-direction:column;gap:2px}.kbx-who strong{font-size:13px;font-weight:500;overflow-wrap:anywhere}.kbx-who span{font-size:11px;color:var(--m);overflow-wrap:anywhere}' +
     '.kbx-acts{display:flex;gap:6px}.kbx-acts button{border:1px solid var(--b);background:var(--w);border-radius:5px;padding:6px 12px;font-size:12px;cursor:pointer}' +
     '.kbx-acts button.ok{background:var(--r);border-color:var(--r);color:#fff}' +
+    '.kbx-acts button.del{color:#b42318;border-color:#f1c0bb}.kbx-acts button.del:hover{background:#fdecea}.kbx-sec{font-size:12px;font-weight:600;color:var(--m);margin:18px 0 6px}' +
     '.kbx-tag{font-size:10px;font-weight:600;color:var(--m);border:1px solid var(--b);border-radius:9px;padding:0 6px;line-height:16px}' +
     '.kbx-empty{font-size:13px;color:var(--m);padding:12px 0}' +
     '.kbx-link{border:0;background:transparent;color:var(--m);font-size:12px;cursor:pointer;padding:0;text-decoration:underline}';
@@ -417,6 +418,31 @@
     if (d.error) throw d.error;
   }
 
+  // Ekipte olmayan bir hesabı Supabase'den tamamen siler (sunucu tarafında yalnızca yönetici yapabilir)
+  async function deleteAccount(id, label) {
+    if (!confirm('"' + label + '" hesabı tamamen silinsin mi?\n\nKişi giriş yapamaz ve listeden kalkar. Bu işlem geri alınamaz.')) return false;
+    var r = await client().rpc('kb_delete_user', { target: id });
+    if (r.error) throw r.error;
+    await ensureLoaded();
+    var meta = clone(cache.get('board/meta'));
+    if (meta && Array.isArray(meta.people) && meta.people.some(function (p) { return p.id === id; })) {
+      var now = Date.now();
+      meta.people = meta.people.filter(function (p) { return p.id !== id; });
+      meta.gone = Object.assign({}, meta.gone || {}); meta.gone[id] = now;   // açık sekmelerdeki eski kopyalar kişiyi geri getirmesin
+      await ref('board/meta').set(meta);
+    }
+    return true;
+  }
+  var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  function formerMembers() {
+    var meta = cache.get('board/meta');
+    if (!meta || !Array.isArray(meta.people)) return [];
+    var inTeam = {};
+    (meta.projects || []).forEach(function (p) { (p.members || []).forEach(function (m) { inTeam[m.id] = 1; }); });
+    var me = session && session.user && session.user.id;
+    return meta.people.filter(function (p) { return p && UUID_RE.test(String(p.id)) && !inTeam[p.id] && p.id !== me; });
+  }
+
   function initOwnerPanel() {
     var c = client(), fab = null, rows = [];
     // Yönetici için her zaman görünen düğme; bekleyen varsa kırmızı ve sayılı
@@ -465,6 +491,8 @@
               await load(); draw();
             });
             acts.appendChild(noB);
+          } else {
+            acts.appendChild(delBtn(req.user_id, label));
           }
           box.appendChild(h('div', { class: 'kbx-row' }, [
             h('span', { class: 'kbx-av', text: initials(label) }),
@@ -475,6 +503,28 @@
             acts
           ]));
         });
+        var reqIds = {}; rows.forEach(function (x) { reqIds[x.user_id] = 1; });
+        var former = formerMembers().filter(function (p) { return !reqIds[p.id]; });
+        if (former.length) {
+          box.appendChild(h('h3', { class: 'kbx-sec', text: 'Ekipte olmayan hesaplar' }));
+          former.forEach(function (p) {
+            var label = p.name || p.email || 'Kullanıcı';
+            box.appendChild(h('div', { class: 'kbx-row' }, [
+              h('span', { class: 'kbx-av', text: initials(label) }),
+              h('div', { class: 'kbx-who' }, [h('strong', { text: label }), h('span', { text: p.email && p.name ? p.email : 'Hiçbir projede değil' })]),
+              h('div', { class: 'kbx-acts' }, [delBtn(p.id, label)])
+            ]));
+          });
+        }
+      }
+      function delBtn(id, label) {
+        var b = h('button', { class: 'del', type: 'button', text: 'Hesabı sil' });
+        b.addEventListener('click', async function () {
+          b.disabled = true; b.textContent = 'Siliniyor…';
+          try { if (await deleteAccount(id, label)) { await load(); } draw(); }
+          catch (e) { b.disabled = false; b.textContent = 'Hesabı sil'; alert('Silinemedi: ' + (e.message || e)); }
+        });
+        return b;
       }
       load().then(draw, draw);
       mount(panel);
