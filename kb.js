@@ -39,6 +39,50 @@
   })();
   applyTheme();
 
+  /* ---------- telefon düzeni (yalnızca dar ekranlarda; bilgisayar görünümü değişmez) ---------- */
+  var PHONE_MQ = '(max-width: 768px)';
+  function isPhone() { try { return window.matchMedia(PHONE_MQ).matches; } catch (e) { return false; } }
+  var phoneSideOpen = false;   // telefonda menü her açılışta kapalı başlar
+  function rerender() { try { if (window.__kbRerender) window.__kbRerender(); } catch (e) {} }
+  try { window.matchMedia(PHONE_MQ).addEventListener('change', function () { phoneSideOpen = false; rerender(); }); } catch (e) {}
+  document.addEventListener('click', function (e) {
+    if (isPhone() && phoneSideOpen && e.target && e.target.closest && e.target.closest('[data-kb-nav]')) {
+      setTimeout(function () { phoneSideOpen = false; rerender(); }, 0);
+    }
+  }, true);
+  (function () {
+    var st = document.createElement('style');
+    st.id = 'kb-phone-css';
+    st.textContent =
+      '.kb-scrim,.kb-mbtn{display:none}' +
+      '@media ' + PHONE_MQ + '{' +
+        '.kb-root{height:100vh!important;height:100dvh!important}' +
+        '.kb-rail{display:none!important}' +
+        '.kb-aside{position:fixed!important;left:0;top:0;bottom:0;z-index:26;width:min(300px,86vw)!important;box-shadow:4px 0 24px rgba(0,0,0,.25)}' +
+        '.kb-scrim{display:block;position:fixed;inset:0;z-index:25;background:rgba(0,0,0,.35)}' +
+        '.kb-mbtn{display:flex;align-items:center;justify-content:center;position:fixed;top:12px;left:12px;z-index:16;width:38px;height:38px;border-radius:6px;border:1px solid var(--border-default);background:var(--surface-page);color:var(--text-primary);box-shadow:0 1px 6px rgba(0,0,0,.12);cursor:pointer;padding:0}' +
+        '.kb-phead{padding:60px 16px 0!important;gap:14px!important}' +
+        '.kb-phead h1,.kb-home h1{font-size:21px!important}' +
+        '.kb-ptitle{gap:12px!important}' +
+        '.kb-tools{flex-direction:column;align-items:stretch!important;gap:8px!important}' +
+        '.kb-tabs{gap:18px!important;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}' +
+        '.kb-tabs button{flex-shrink:0}' +
+        '.kb-search{width:100%!important;flex:1;min-width:0}' +
+        '.kb-sec{padding:14px 16px 20px!important;scroll-snap-type:x mandatory}' +
+        '.kb-cols{gap:12px!important}' +
+        '.kb-col{width:84vw!important;scroll-snap-align:start}' +
+        '.kb-home{padding:60px 16px 24px!important;gap:20px!important}' +
+        '.kb-charts{grid-template-columns:1fr!important}' +
+        '.kb-chartin{grid-template-columns:1fr!important}' +
+        '.kb-foot{display:none!important}' +
+        '.kb-detail{width:100%!important}' +
+        '.kb-modalwrap{padding:0!important}' +
+        '.kb-modal{width:100%!important;height:100%;max-height:100%!important;border-radius:0!important;padding:22px 16px!important}' +
+        '.kbx-fab{bottom:14px!important;right:12px!important;padding:8px 12px!important}' +
+      '}';
+    (document.head || document.documentElement).appendChild(st);
+  })();
+
   function client() {
     if (sb) return sb;
     var lib = window.supabase;
@@ -245,8 +289,12 @@
     ready: ready,
     hasNoAccess: function () { return noAccess; },
     isDark: function () { return theme === 'dark'; },
-    isSideHidden: function () { try { return localStorage.getItem('kb-side') === 'hidden'; } catch (e) { return false; } },
+    isSideHidden: function () {
+      if (isPhone()) return !phoneSideOpen;
+      try { return localStorage.getItem('kb-side') === 'hidden'; } catch (e) { return false; }
+    },
     toggleSide: function () {
+      if (isPhone()) { phoneSideOpen = !phoneSideOpen; return !phoneSideOpen; }
       var hide = !window.__kb.isSideHidden();
       try { localStorage.setItem('kb-side', hide ? 'hidden' : 'shown'); } catch (e) {}
       return hide;
