@@ -257,6 +257,7 @@
     '.kbx-err{font-size:12px;color:var(--r);line-height:1.4;min-height:0}' +
     '.kbx-fab{position:fixed;right:16px;bottom:60px;z-index:2147483500;display:flex;align-items:center;gap:8px;border:0;border-radius:999px;background:var(--r);color:#fff;font-size:12px;font-weight:600;padding:9px 14px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)}' +
     '.kbx-fab b{background:#fff;color:var(--r);border-radius:999px;min-width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0 6px}' +
+    '.kbx-fab.idle{background:var(--w);color:var(--t2);border:1px solid var(--b);box-shadow:0 1px 6px rgba(0,0,0,.10)}.kbx-fab.idle b{background:var(--s);color:var(--m)}.kbx-fab.idle:hover{border-color:var(--r);color:var(--r)}' +
     '.kbx-panel{position:fixed;inset:0;z-index:2147483550;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:16px}' +
     '.kbx-pbox{background:var(--w);width:100%;max-width:520px;max-height:85vh;overflow:auto;border-radius:6px;padding:22px;display:flex;flex-direction:column;gap:12px;text-align:left}' +
     '.kbx-ph{display:flex;align-items:center;justify-content:space-between;gap:10px}.kbx-ph h2{margin:0;font-size:17px;font-weight:600}' +
@@ -418,19 +419,21 @@
 
   function initOwnerPanel() {
     var c = client(), fab = null, rows = [];
+    // Yönetici için her zaman görünen düğme; bekleyen varsa kırmızı ve sayılı
+    function drawFab(n) {
+      if (!fab) fab = mount(h('button', { class: 'kbx-fab idle', type: 'button', title: 'Erişim isteklerini aç', onclick: openPanel }));
+      fab.textContent = '';
+      fab.appendChild(document.createTextNode('Onay bekleyenler'));
+      fab.appendChild(h('b', { text: String(n) }));
+      fab.className = 'kbx-fab' + (n ? '' : ' idle');
+      fab.setAttribute('aria-label', 'Onay bekleyenler: ' + n);
+    }
+    drawFab(0);
     async function load() {
       var r = await c.from('access_requests').select('user_id,email,username,display_name,provider,status,created_at').order('created_at', { ascending: true });
       rows = (r && r.data) || [];
       var n = rows.filter(function (x) { return x.status === 'pending'; }).length;
-      if (n && !fab) {
-        fab = mount(h('button', { class: 'kbx-fab', type: 'button', onclick: openPanel }));
-      }
-      if (fab) {
-        fab.textContent = '';
-        fab.appendChild(document.createTextNode('Onay bekleyenler'));
-        fab.appendChild(h('b', { text: String(n) }));
-        fab.style.display = n ? '' : 'none';
-      }
+      drawFab(n);
       return rows;
     }
     function openPanel() {
