@@ -251,6 +251,7 @@
       try { localStorage.setItem('kb-side', hide ? 'hidden' : 'shown'); } catch (e) {}
       return hide;
     },
+    deleteAuthUser: function (id) { var c = client(); return c ? c.rpc('kb_delete_user', { target: id }) : Promise.resolve({ error: { message: 'Bağlantı yok' } }); },
     isUsernameAccount: function () { return !!(session && usernameOf(rawEmail())); },
     toggleTheme: function () {
       theme = theme === 'dark' ? 'light' : 'dark';
