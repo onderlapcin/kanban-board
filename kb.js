@@ -8,6 +8,37 @@
   var BUCKET = C.BUCKET || 'attachments';
   var sb = null, session = null, noAccess = false;
 
+  /* ---------- aydınlık / karanlık mod (tercih bu tarayıcıda saklanır; varsayılan aydınlık) ---------- */
+  var THEME_KEY = 'kb-theme';
+  function readTheme() { try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; } catch (e) { return 'light'; } }
+  var theme = readTheme();
+  function applyTheme() {
+    document.documentElement.setAttribute('data-theme', theme);
+    var m = document.querySelector('meta[name="color-scheme"]');
+    if (!m) { m = document.createElement('meta'); m.name = 'color-scheme'; (document.head || document.documentElement).appendChild(m); }
+    m.content = theme;
+  }
+  (function () {
+    var st = document.createElement('style');
+    st.id = 'kb-theme-css';
+    st.textContent =
+      'html[data-theme="dark"]{color-scheme:dark;' +
+        '--text-primary:#F1F1F3;--text-secondary:#C9C9CE;--text-muted:#8E8E95;--text-accent:#F2557A;--text-inverse:#FFFFFF;' +
+        '--link:#F2557A;--link-visited:#F2557A;' +
+        '--surface-page:#18191C;--surface-subtle:#222428;--surface-muted:#34363B;--surface-dark:#45474D;' +
+        '--border-default:#34363B;--border-strong:#6A6C73;' +
+        '--fev-white:#18191C;--fev-black:#F1F1F3;--fev-grey-100:#222428;--fev-grey-200:#34363B;--fev-grey-800:#C9C9CE;--fev-grey-900:#E0E0E4;--fev-grey-500:#8E8E95}' +
+      'html[data-theme="dark"],html[data-theme="dark"] body{background:#18191C;color:#F1F1F3}' +
+      'html[data-theme="dark"] input,html[data-theme="dark"] select,html[data-theme="dark"] textarea{background-color:#18191C;color:#F1F1F3}' +
+      'html[data-theme="dark"] input::placeholder,html[data-theme="dark"] textarea::placeholder{color:#7A7A82}' +
+      /* tasarım sistemi düğmeleri: kırmızı/koyu zemin üstünde yazı beyaz kalsın */
+      'html[data-theme="dark"] [style*="color: var(--fev-white)"]{color:#fff!important}' +
+      'html[data-theme="dark"] button[style*="background: var(--fev-grey-800)"]{background:#45474D!important}' +
+      'html,body,aside,main,div,span,button,input,select,textarea{transition:background-color .15s,border-color .15s,color .15s}';
+    (document.head || document.documentElement).appendChild(st);
+  })();
+  applyTheme();
+
   function client() {
     if (sb) return sb;
     var lib = window.supabase;
@@ -213,6 +244,13 @@
     authError: authError,
     ready: ready,
     hasNoAccess: function () { return noAccess; },
+    isDark: function () { return theme === 'dark'; },
+    toggleTheme: function () {
+      theme = theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+      applyTheme();
+      return theme === 'dark';
+    },
     signIn: function (provider) {
       var c = client();
       if (!c) { alert('Board henüz yapılandırılmadı (config.js).'); return; }
@@ -235,6 +273,11 @@
   var CSS = '' +
     '.kbx{--r:#B9052D;--rd:#8A0321;--t:#000;--t2:#3F3F3F;--m:#797979;--b:#DBDBDB;--s:#F2F2F2;--w:#fff;font-family:Poppins,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--t);box-sizing:border-box}' +
     '.kbx *{box-sizing:border-box;font-family:inherit}' +
+    'html[data-theme="dark"] .kbx{--t:#F1F1F3;--t2:#C9C9CE;--m:#8E8E95;--b:#34363B;--s:#26282C;--w:#18191C}' +
+    'html[data-theme="dark"] .kbx-tabs button.on,html[data-theme="dark"] .kbx-av{background:#45474D}' +
+    'html[data-theme="dark"] .kbx-err{color:#F2557A}' +
+    'html[data-theme="dark"] .kbx-acts button.del{color:#FF8A80;border-color:#5A2A2E}html[data-theme="dark"] .kbx-acts button.del:hover{background:#3A1F22}' +
+    'html[data-theme="dark"] .kbx-panel{background:rgba(0,0,0,.6)}' +
     '.kbx-ov{position:fixed;inset:0;z-index:2147483600;background:var(--w);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}' +
     '.kbx-card{width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}' +
     '.kbx-logo{width:48px;height:48px;background:var(--r);display:flex;align-items:flex-start;justify-content:center;gap:4px;padding-top:12px}' +
@@ -261,11 +304,11 @@
     '.kbx-panel{position:fixed;inset:0;z-index:2147483550;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:16px}' +
     '.kbx-pbox{background:var(--w);width:100%;max-width:520px;max-height:85vh;overflow:auto;border-radius:6px;padding:22px;display:flex;flex-direction:column;gap:12px;text-align:left}' +
     '.kbx-ph{display:flex;align-items:center;justify-content:space-between;gap:10px}.kbx-ph h2{margin:0;font-size:17px;font-weight:600}' +
-    '.kbx-x{border:1px solid var(--b);background:var(--w);border-radius:5px;width:30px;height:30px;cursor:pointer;font-size:16px;line-height:1}' +
+    '.kbx-x{border:1px solid var(--b);background:var(--w);border-radius:5px;width:30px;height:30px;cursor:pointer;font-size:16px;line-height:1;color:var(--t)}' +
     '.kbx-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--s);flex-wrap:wrap}' +
     '.kbx-av{width:34px;height:34px;border-radius:50%;background:var(--t2);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}' +
     '.kbx-who{flex:1;min-width:140px;display:flex;flex-direction:column;gap:2px}.kbx-who strong{font-size:13px;font-weight:500;overflow-wrap:anywhere}.kbx-who span{font-size:11px;color:var(--m);overflow-wrap:anywhere}' +
-    '.kbx-acts{display:flex;gap:6px}.kbx-acts button{border:1px solid var(--b);background:var(--w);border-radius:5px;padding:6px 12px;font-size:12px;cursor:pointer}' +
+    '.kbx-acts{display:flex;gap:6px}.kbx-acts button{border:1px solid var(--b);background:var(--w);border-radius:5px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--t)}' +
     '.kbx-acts button.ok{background:var(--r);border-color:var(--r);color:#fff}' +
     '.kbx-acts button.del{color:#b42318;border-color:#f1c0bb}.kbx-acts button.del:hover{background:#fdecea}.kbx-sec{font-size:12px;font-weight:600;color:var(--m);margin:18px 0 6px}' +
     '.kbx-tag{font-size:10px;font-weight:600;color:var(--m);border:1px solid var(--b);border-radius:9px;padding:0 6px;line-height:16px}' +
@@ -384,7 +427,7 @@
       h('p', { text: status === 'rejected'
         ? 'Board yöneticisi bu hesabın erişim isteğini onaylamadı. Bir hata olduğunu düşünüyorsan yöneticiyle iletişime geç.'
         : "Hesabın oluşturuldu. Board yöneticisi onayladığında board'a erişebileceksin; bu sayfa onay gelince kendiliğinden açılır." }),
-      who ? h('p', { style: 'font-size:12px;color:#797979', text: 'Giriş yapılan hesap: ' + who }) : null,
+      who ? h('p', { style: 'font-size:12px;color:var(--m)', text: 'Giriş yapılan hesap: ' + who }) : null,
       h('button', { class: 'kbx-btn', type: 'button', onclick: function () { window.__kb.signOut(); }, text: 'Farklı hesapla giriş yap' })
     ]);
     ov.appendChild(card); mount(ov);
