@@ -45,6 +45,13 @@
   var phoneSideOpen = false;   // telefonda menü her açılışta kapalı başlar
   function rerender() { try { if (window.__kbRerender) window.__kbRerender(); } catch (e) {} }
   try { window.matchMedia(PHONE_MQ).addEventListener('change', function () { phoneSideOpen = false; rerender(); }); } catch (e) {}
+  // profil penceresi açıkken dışına tıklanırsa kapat
+  document.addEventListener('pointerdown', function (e) {
+    var t = e.target;
+    if (!t || !t.closest || !document.querySelector('.kb-profile')) return;
+    if (t.closest('.kb-profile') || t.closest('.kb-profcard')) return;
+    if (window.__kbCloseProfile) window.__kbCloseProfile();
+  }, true);
   document.addEventListener('click', function (e) {
     if (isPhone() && phoneSideOpen && e.target && e.target.closest && e.target.closest('[data-kb-nav]')) {
       setTimeout(function () { phoneSideOpen = false; rerender(); }, 0);
