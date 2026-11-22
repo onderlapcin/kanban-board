@@ -329,6 +329,9 @@
   var CSS = '' +
     '.kbx{--r:#B9052D;--rd:#8A0321;--t:#000;--t2:#3F3F3F;--m:#797979;--b:#DBDBDB;--s:#F2F2F2;--w:#fff;font-family:Poppins,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--t);box-sizing:border-box}' +
     '.kbx *{box-sizing:border-box;font-family:inherit}' +
+    '.kbx-appr{display:flex;flex-direction:column;gap:6px;padding-bottom:6px;border-bottom:1px solid var(--b);margin-bottom:4px}' +
+    '.kbx-apph{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--t2)}' +
+    '.kbx-appp{font-size:12px;line-height:1.4;color:var(--m);margin:0}' +
     'html[data-theme="dark"] .kbx{--t:#F1F1F3;--t2:#C9C9CE;--m:#8E8E95;--b:#34363B;--s:#26282C;--w:#18191C}' +
     'html[data-theme="dark"] .kbx-tabs button.on,html[data-theme="dark"] .kbx-av{background:#45474D}' +
     'html[data-theme="dark"] .kbx-err{color:#F2557A}' +
@@ -543,94 +546,79 @@
   }
 
   function initOwnerPanel() {
-    var c = client(), fab = null, rows = [];
-    // Yönetici için her zaman görünen düğme; bekleyen varsa kırmızı ve sayılı
-    function drawFab(n) {
-      if (!fab) fab = mount(h('button', { class: 'kbx-fab idle', type: 'button', title: 'Erişim isteklerini aç', onclick: openPanel }));
-      fab.textContent = '';
-      fab.appendChild(document.createTextNode('Onay bekleyenler'));
-      fab.appendChild(h('b', { text: String(n) }));
-      fab.className = 'kbx kbx-fab' + (n ? '' : ' idle');
-      fab.setAttribute('aria-label', 'Onay bekleyenler: ' + n);
-    }
-    drawFab(0);
+    // Erişim istekleri "Ekibi yönet" (Paylaş) penceresinin içinde gösterilir; bekleyen sayısı Paylaş düğmesinde görünür
+    var c = client(), rows = [], pending = 0;
+    if (!styled) { document.head.appendChild(h('style', { text: CSS })); styled = true; }
+    window.__kb.pendingCount = function () { return pending; };
     async function load() {
       var r = await c.from('access_requests').select('user_id,email,username,display_name,provider,status,created_at').order('created_at', { ascending: true });
       rows = (r && r.data) || [];
       var n = rows.filter(function (x) { return x.status === 'pending'; }).length;
-      drawFab(n);
+      if (n !== pending) { pending = n; rerender(); }
+      var el = document.getElementById('kb-approvals');
+      if (el) draw(el);
       return rows;
     }
-    function openPanel() {
-      var box = h('div', { class: 'kbx-pbox' });
-      var panel = h('div', { class: 'kbx-panel', role: 'dialog', 'aria-label': 'Onay bekleyenler', onclick: function (e) { if (e.target === panel) panel.remove(); } }, [box]);
-      function draw() {
-        box.textContent = '';
-        box.appendChild(h('div', { class: 'kbx-ph' }, [h('h2', { text: 'Erişim istekleri' }), h('button', { class: 'kbx-x', type: 'button', 'aria-label': 'Kapat', text: '×', onclick: function () { panel.remove(); } })]));
-        box.appendChild(h('p', { text: 'Onayladığın kişi ekibe eklenir ve tüm projelerde düzenleyebilir olarak başlar. Ekip listesinden istediğin projeden çıkarabilirsin.' }));
-        var pend = rows.filter(function (x) { return x.status === 'pending'; }), rej = rows.filter(function (x) { return x.status === 'rejected'; });
-        if (!pend.length) box.appendChild(h('div', { class: 'kbx-empty', text: 'Bekleyen istek yok.' }));
-        pend.concat(rej).forEach(function (req) {
-          var label = req.username || req.display_name || req.email || 'Kullanıcı';
-          var sub = req.username ? 'Kullanıcı adıyla kayıt' : (req.email || '');
-          var acts = h('div', { class: 'kbx-acts' });
-          var okB = h('button', { class: 'ok', type: 'button', text: 'Onayla' });
-          okB.addEventListener('click', async function () {
-            okB.disabled = true; okB.textContent = 'Onaylanıyor…';
-            try { await approve(req); await load(); draw(); }
-            catch (e) { okB.disabled = false; okB.textContent = 'Onayla'; alert('Onaylanamadı: ' + (e.message || e)); }
-          });
-          acts.appendChild(okB);
-          if (req.status === 'pending') {
-            var noB = h('button', { type: 'button', text: 'Reddet' });
-            noB.addEventListener('click', async function () {
-              noB.disabled = true;
-              var u = await c.from('access_requests').update({ status: 'rejected' }).eq('user_id', req.user_id);
-              if (u.error) { noB.disabled = false; alert('Reddedilemedi: ' + u.error.message); return; }
-              await load(); draw();
-            });
-            acts.appendChild(noB);
-          } else {
-            acts.appendChild(delBtn(req.user_id, label));
-          }
-          box.appendChild(h('div', { class: 'kbx-row' }, [
-            h('span', { class: 'kbx-av', text: initials(label) }),
-            h('div', { class: 'kbx-who' }, [
-              h('strong', {}, [label + ' ', req.status === 'rejected' ? h('span', { class: 'kbx-tag', text: 'Reddedildi' }) : null]),
-              h('span', { text: sub + (req.created_at ? ' · ' + fmtDate(req.created_at) : '') })
-            ]),
-            acts
-          ]));
-        });
-        var reqIds = {}; rows.forEach(function (x) { reqIds[x.user_id] = 1; });
-        var former = formerMembers().filter(function (p) { return !reqIds[p.id]; });
-        if (former.length) {
-          box.appendChild(h('h3', { class: 'kbx-sec', text: 'Ekipte olmayan hesaplar' }));
-          former.forEach(function (p) {
-            var label = p.name || p.email || 'Kullanıcı';
-            box.appendChild(h('div', { class: 'kbx-row' }, [
-              h('span', { class: 'kbx-av', text: initials(label) }),
-              h('div', { class: 'kbx-who' }, [h('strong', { text: label }), h('span', { text: p.email && p.name ? p.email : 'Hiçbir projede değil' })]),
-              h('div', { class: 'kbx-acts' }, [delBtn(p.id, label)])
-            ]));
-          });
-        }
-      }
-      function delBtn(id, label) {
-        var b = h('button', { class: 'del', type: 'button', text: 'Hesabı sil' });
-        b.addEventListener('click', async function () {
-          b.disabled = true; b.textContent = 'Siliniyor…';
-          try { if (await deleteAccount(id, label)) { await load(); } draw(); }
-          catch (e) { b.disabled = false; b.textContent = 'Hesabı sil'; alert('Silinemedi: ' + (e.message || e)); }
-        });
-        return b;
-      }
-      load().then(draw, draw);
-      mount(panel);
+    function delBtn(id, label) {
+      var b = h('button', { class: 'del', type: 'button', text: 'Hesabı sil' });
+      b.addEventListener('click', async function () {
+        b.disabled = true; b.textContent = 'Siliniyor…';
+        try { if (await deleteAccount(id, label)) { await load(); } else { b.disabled = false; b.textContent = 'Hesabı sil'; } }
+        catch (e) { b.disabled = false; b.textContent = 'Hesabı sil'; alert('Silinemedi: ' + (e.message || e)); }
+      });
+      return b;
     }
+    function draw(el) {
+      var pend = rows.filter(function (x) { return x.status === 'pending'; }), rej = rows.filter(function (x) { return x.status === 'rejected'; });
+      el.textContent = '';
+      if (!pend.length && !rej.length) { el.style.display = 'none'; el.__kbDrawn = true; return; }
+      var box = h('div', { class: 'kbx kbx-appr' });
+      box.appendChild(h('span', { class: 'kbx-apph', text: 'ONAY BEKLEYENLER' + (pend.length ? ' · ' + pend.length : '') }));
+      box.appendChild(h('p', { class: 'kbx-appp', text: 'Onayladığın kişi tüm projelere "Düzenleyebilir" olarak eklenir; aşağıdaki ekip listesinden istediğin projeden çıkarabilirsin.' }));
+      if (!pend.length) box.appendChild(h('div', { class: 'kbx-empty', text: 'Bekleyen istek yok.' }));
+      pend.concat(rej).forEach(function (req) {
+        var label = req.username || req.display_name || req.email || 'Kullanıcı';
+        var sub = req.username ? 'Kullanıcı adıyla kayıt' : (req.email || '');
+        var acts = h('div', { class: 'kbx-acts' });
+        var okB = h('button', { class: 'ok', type: 'button', text: 'Onayla' });
+        okB.addEventListener('click', async function () {
+          okB.disabled = true; okB.textContent = 'Onaylanıyor…';
+          try { await approve(req); await load(); }
+          catch (e) { okB.disabled = false; okB.textContent = 'Onayla'; alert('Onaylanamadı: ' + (e.message || e)); }
+        });
+        acts.appendChild(okB);
+        if (req.status === 'pending') {
+          var noB = h('button', { type: 'button', text: 'Reddet' });
+          noB.addEventListener('click', async function () {
+            noB.disabled = true;
+            var u = await c.from('access_requests').update({ status: 'rejected' }).eq('user_id', req.user_id);
+            if (u.error) { noB.disabled = false; alert('Reddedilemedi: ' + u.error.message); return; }
+            await load();
+          });
+          acts.appendChild(noB);
+        } else {
+          acts.appendChild(delBtn(req.user_id, label));
+        }
+        box.appendChild(h('div', { class: 'kbx-row' }, [
+          h('span', { class: 'kbx-av', text: initials(label) }),
+          h('div', { class: 'kbx-who' }, [
+            h('strong', {}, [label + ' ', req.status === 'rejected' ? h('span', { class: 'kbx-tag', text: 'Reddedildi' }) : null]),
+            h('span', { text: sub + (req.created_at ? ' · ' + fmtDate(req.created_at) : '') })
+          ]),
+          acts
+        ]));
+      });
+      el.appendChild(box);
+      el.style.display = 'block';
+      el.__kbDrawn = true;
+    }
+    // pencere her açıldığında bölümü doldur
+    new MutationObserver(function () {
+      var el = document.getElementById('kb-approvals');
+      if (el && !el.__kbDrawn) { draw(el); load().catch(function () {}); }
+    }).observe(document.body, { childList: true, subtree: true });
     load().catch(function () {});
     setInterval(function () { if (!document.hidden) load().catch(function () {}); }, 30000);
-    window.__kb.openApprovals = openPanel;
   }
 
   function boot() {
