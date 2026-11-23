@@ -687,12 +687,19 @@
     var sig = JSON.stringify(o);
     if (sig !== pres.sig) { pres.sig = sig; pres.others = o; rerender(); }
   }
+  function presTrackNow() {
+    var ch = pres.ch;
+    if (!ch || !pres.ready) return;
+    try {
+      pres.dirty = false;
+      var r = ch.track({ pid: pres.me || '', task: pres.task || null, at: Date.now() });
+      var fail = function () { if (ch === pres.ch) { pres.dirty = true; setTimeout(presEnsure, 3000); } };
+      if (r && r.then) r.then(function (res) { if (res !== 'ok') fail(); }, fail);
+    } catch (e) {}
+  }
   function presPush() {
-    if (!pres.ch || !pres.ready) return;
     clearTimeout(pres.t);
-    pres.t = setTimeout(function () {
-      try { var r = pres.ch.track({ pid: pres.me || '', task: pres.task || null, at: Date.now() }); if (r && r.catch) r.catch(function () {}); } catch (e) {}
-    }, 250);
+    pres.t = setTimeout(presTrackNow, 60);
   }
   function presStart() {
     var c = client();
@@ -700,11 +707,30 @@
     try {
       var ch = c.channel('kb-presence', { config: { presence: { key: session.user.id } } });
       if (!ch || typeof ch.track !== 'function' || typeof ch.presenceState !== 'function') return;
-      ch.on('presence', { event: 'sync' }, function () { presApply(ch.presenceState()); });
-      ch.subscribe(function (st) { if (st === 'SUBSCRIBED') { pres.ready = true; presPush(); } });
-      pres.ch = ch;
+      ch.on('presence', { event: 'sync' }, function () { if (ch === pres.ch) presApply(ch.presenceState()); });
+      pres.ch = ch; pres.ready = false;
+      ch.subscribe(function (st) {
+        if (ch !== pres.ch) return;
+        if (st === 'SUBSCRIBED') { pres.ready = true; presTrackNow(); }
+        else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { pres.ready = false; setTimeout(presEnsure, 3000); }
+      });
     } catch (e) {}
   }
+  // Bağlantı koptuysa (ör. sekme arka planda uzun süre kaldıysa) kanalı yeniden kur ve durumu tekrar bildir
+  function presEnsure() {
+    if (!session || noAccess) return;
+    var ch = pres.ch;
+    if (!ch) { presStart(); return; }
+    var st = ch.state;
+    if (st === 'joined') { if (pres.ready && pres.dirty) presTrackNow(); return; }
+    if (st === 'joining') return;
+    pres.ch = null; pres.ready = false;
+    try { client().removeChannel(ch); } catch (e) {}
+    presStart();
+  }
+  setInterval(function () { if (!document.hidden) presEnsure(); }, 20000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) presEnsure(); });
+  window.addEventListener('online', function () { setTimeout(presEnsure, 1000); });
 
   function boot() {
     ready.then(function () {
