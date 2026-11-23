@@ -338,6 +338,13 @@
       return hide;
     },
     deleteAuthUser: function (id) { var c = client(); return c ? c.rpc('kb_delete_user', { target: id }) : Promise.resolve({ error: { message: 'Bağlantı yok' } }); },
+    setEditing: function (pid, taskId) {
+      pid = pid || ''; taskId = taskId || null;
+      if (pid === pres.me && taskId === pres.task) return;
+      pres.me = pid; pres.task = taskId; presPush();
+    },
+    editorsOf: function (taskId) { return (taskId && pres.others[taskId]) || []; },
+    _presence: presApply,
     isUsernameAccount: function () { return !!(session && usernameOf(rawEmail())); },
     toggleTheme: function () {
       theme = theme === 'dark' ? 'light' : 'dark';
@@ -664,11 +671,47 @@
     setInterval(function () { if (!document.hidden) load().catch(function () {}); }, 30000);
   }
 
+
+  /* ---------- canlı varlık: kim hangi görevi şu an açık tutuyor (Supabase Realtime presence) ---------- */
+  var pres = { ch: null, ready: false, me: '', task: null, others: {}, sig: '{}', t: null };
+  function presApply(state) {
+    var o = {}, myKey = session && session.user && session.user.id;
+    Object.keys(state || {}).forEach(function (k) {
+      if (k === myKey) return;
+      (state[k] || []).forEach(function (m) {
+        if (!m || !m.task || !m.pid) return;
+        var a = o[m.task] || (o[m.task] = []);
+        if (!a.some(function (x) { return x.pid === m.pid; })) a.push({ pid: m.pid });
+      });
+    });
+    var sig = JSON.stringify(o);
+    if (sig !== pres.sig) { pres.sig = sig; pres.others = o; rerender(); }
+  }
+  function presPush() {
+    if (!pres.ch || !pres.ready) return;
+    clearTimeout(pres.t);
+    pres.t = setTimeout(function () {
+      try { var r = pres.ch.track({ pid: pres.me || '', task: pres.task || null, at: Date.now() }); if (r && r.catch) r.catch(function () {}); } catch (e) {}
+    }, 250);
+  }
+  function presStart() {
+    var c = client();
+    if (pres.ch || !c || !c.channel || !session) return;
+    try {
+      var ch = c.channel('kb-presence', { config: { presence: { key: session.user.id } } });
+      if (!ch || typeof ch.track !== 'function' || typeof ch.presenceState !== 'function') return;
+      ch.on('presence', { event: 'sync' }, function () { presApply(ch.presenceState()); });
+      ch.subscribe(function (st) { if (st === 'SUBSCRIBED') { pres.ready = true; presPush(); } });
+      pres.ch = ch;
+    } catch (e) {}
+  }
+
   function boot() {
     ready.then(function () {
       if (!client()) return;
       if (!session) { renderLogin(); return; }
       if (noAccess) { renderPending(); return; }
+      presStart();
       if (OWNER && email() === OWNER) initOwnerPanel();
     });
   }
