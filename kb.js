@@ -711,7 +711,7 @@
       pres.ch = ch; pres.ready = false;
       ch.subscribe(function (st) {
         if (ch !== pres.ch) return;
-        if (st === 'SUBSCRIBED') { pres.ready = true; presTrackNow(); }
+        if (st === 'SUBSCRIBED') { pres.ready = true; pres.joinSince = 0; presTrackNow(); }
         else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { pres.ready = false; setTimeout(presEnsure, 3000); }
       });
     } catch (e) {}
@@ -723,7 +723,11 @@
     if (!ch) { presStart(); return; }
     var st = ch.state;
     if (st === 'joined') { if (pres.ready && pres.dirty) presTrackNow(); return; }
-    if (st === 'joining') return;
+    if (st === 'joining') {
+      if (!pres.joinSince) pres.joinSince = Date.now();
+      if (Date.now() - pres.joinSince < 15000) return;   // takılı kaldıysa yeniden kur
+    }
+    pres.joinSince = 0;
     pres.ch = null; pres.ready = false;
     try { client().removeChannel(ch); } catch (e) {}
     presStart();
