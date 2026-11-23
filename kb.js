@@ -39,6 +39,37 @@
   })();
   applyTheme();
 
+  /* ---------- yeni sürüm uyarısı: site güncellenince açık sayfalara "Yenile" bildirimi ---------- */
+  (function () {
+    var shownFor = null, bar = null;
+    function show(v) {
+      if (shownFor === v) return; shownFor = v;
+      if (!styled) { document.head.appendChild(h('style', { text: CSS })); styled = true; }
+      if (bar) bar.remove();
+      var reload = h('button', { class: 'kbx-upd-go', type: 'button', text: 'Yenile' });
+      reload.addEventListener('click', function () { location.reload(); });
+      var close = h('button', { class: 'kbx-upd-x', type: 'button', 'aria-label': 'Kapat', title: 'Kapat', text: '×' });
+      close.addEventListener('click', function () { bar.remove(); bar = null; });
+      bar = h('div', { class: 'kbx kbx-upd', role: 'status' }, [
+        h('span', { class: 'kbx-upd-dot' }),
+        h('span', { class: 'kbx-upd-t', text: 'Kanban board güncellendi. Yeni sürümü görmek için sayfayı yenile.' }),
+        reload, close
+      ]);
+      document.body.appendChild(bar);
+    }
+    function check() {
+      if (!window.KB_BUILD || document.hidden) return;
+      fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { if (j && j.v && j.v !== window.KB_BUILD) show(j.v); })
+        .catch(function () {});
+    }
+    setTimeout(check, 15000);
+    setInterval(check, 3 * 60 * 1000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+    window.addEventListener('focus', check);
+  })();
+
   /* ---------- telefon düzeni (yalnızca dar ekranlarda; bilgisayar görünümü değişmez) ---------- */
   var PHONE_MQ = '(max-width: 768px)';
   function isPhone() { try { return window.matchMedia(PHONE_MQ).matches; } catch (e) { return false; } }
@@ -336,6 +367,11 @@
   var CSS = '' +
     '.kbx{--r:#B9052D;--rd:#8A0321;--t:#000;--t2:#3F3F3F;--m:#797979;--b:#DBDBDB;--s:#F2F2F2;--w:#fff;font-family:Poppins,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--t);box-sizing:border-box}' +
     '.kbx *{box-sizing:border-box;font-family:inherit}' +
+    '.kbx-upd{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:2147483600;display:flex;align-items:center;gap:12px;max-width:calc(100vw - 24px);padding:10px 10px 10px 16px;border-radius:8px;background:var(--w);color:var(--t);border:1px solid var(--b);box-shadow:0 8px 28px rgba(0,0,0,.18);font-size:13px}' +
+    '.kbx-upd-dot{width:8px;height:8px;border-radius:50%;background:var(--r);flex-shrink:0}' +
+    '.kbx-upd-t{line-height:1.35}' +
+    '.kbx-upd-go{border:0;background:var(--r);color:#fff;border-radius:5px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}' +
+    '.kbx-upd-x{border:0;background:transparent;color:var(--m);font-size:18px;line-height:1;cursor:pointer;padding:2px 6px;flex-shrink:0}' +
     '.kbx-appr{display:flex;flex-direction:column;gap:6px;padding-bottom:6px;border-bottom:1px solid var(--b);margin-bottom:4px}' +
     '.kbx-apph{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--t2)}' +
     '.kbx-appp{font-size:12px;line-height:1.4;color:var(--m);margin:0}' +
