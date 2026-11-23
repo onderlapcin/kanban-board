@@ -38,6 +38,7 @@
     (document.head || document.documentElement).appendChild(st);
   })();
   applyTheme();
+  try { document.documentElement.lang = 'tr'; } catch (e) {}   // büyük harfe çevirmede İ/I doğru olsun
 
   /* ---------- yeni sürüm uyarısı: site güncellenince açık sayfalara "Yenile" bildirimi ---------- */
   (function () {
