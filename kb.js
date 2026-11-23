@@ -737,6 +737,266 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden) presEnsure(); });
   window.addEventListener('online', function () { setTimeout(presEnsure, 1000); });
 
+
+  /* ---------- zengin metin: açıklama (sabit çubuk) ve alt görevler (seçince açılan çubuk) ---------- */
+  (function () {
+    var TEXT = [['#B9052D', 'Kırmızı'], ['#0087A0', 'Petrol'], ['#E67319', 'Turuncu'], ['#2E8B57', 'Yeşil'], ['#797979', 'Gri']];
+    var HILITE = [['#FFE29A', 'Sarı'], ['#B8E0C8', 'Nane'], ['#B5D8F5', 'Açık mavi'], ['#F4B6C2', 'Pembe'], ['#C9B6E4', 'Lavanta']];
+    var ALLOWED = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', S: 's', STRIKE: 's', DEL: 's', BR: 'br', DIV: 'div', P: 'div', UL: 'ul', OL: 'ol', LI: 'li', SPAN: 'span', FONT: 'span', MARK: 'span' };
+    var COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|transparent)$/i;
+    function cleanStyle(el) {
+      var out = [], st = el.style;
+      var c = st && st.color; if (el.tagName === 'FONT' && el.getAttribute('color')) c = el.getAttribute('color');
+      if (c && COLOR_RE.test(c.trim())) out.push('color:' + c.trim());
+      var bg = st && (st.backgroundColor || ''); if (el.tagName === 'MARK' && !bg) bg = '#FFE29A';
+      if (bg && COLOR_RE.test(bg.trim()) && !/^(transparent|rgba\(0,\s*0,\s*0,\s*0\))$/i.test(bg.trim())) out.push('background-color:' + bg.trim());
+      var fw = st && st.fontWeight; if (fw && (fw === 'bold' || +fw >= 600)) out.push('font-weight:700');
+      if (st && st.fontStyle === 'italic') out.push('font-style:italic');
+      var td = st && (st.textDecorationLine || st.textDecoration || ''); if (/underline/.test(td) && /line-through/.test(td)) out.push('text-decoration:underline line-through'); else if (/underline/.test(td)) out.push('text-decoration:underline'); else if (/line-through/.test(td)) out.push('text-decoration:line-through');
+      return out.join(';');
+    }
+    function sanitize(html) {
+      var src = document.createElement('div'); src.innerHTML = html || '';
+      var dst = document.createElement('div');
+      (function walk(from, to) {
+        Array.prototype.forEach.call(from.childNodes, function (n) {
+          if (n.nodeType === 3) { to.appendChild(document.createTextNode(n.nodeValue)); return; }
+          if (n.nodeType !== 1) return;
+          var tag = ALLOWED[n.tagName];
+          if (!tag) { walk(n, to); return; }       // bilinmeyen etiket: içeriği kalsın, etiketi gitsin
+          var el = document.createElement(tag);
+          var s = cleanStyle(n);
+          if (tag === 'span') { if (!s) { walk(n, to); return; } el.setAttribute('style', s); }
+          else if (s && tag !== 'br') el.setAttribute('style', s);
+          if (tag === 'div' && n.getAttribute && /^[01]$/.test(n.getAttribute('data-chk') || '')) el.setAttribute('data-chk', n.getAttribute('data-chk'));
+          if (tag !== 'br') walk(n, el);
+          to.appendChild(el);
+        });
+      })(src, dst);
+      var h = dst.innerHTML;
+      if (!dst.textContent.trim() && !/<li|data-chk/i.test(h)) return '';
+      return h;
+    }
+    function textOf(el) { return (el.innerText || el.textContent || '').replace(/ /g, ' ').replace(/\n{3,}/g, '\n\n').trim(); }
+    function api() { return window.__kbRte || {}; }
+
+    var css = document.createElement('style');
+    css.textContent =
+      '.kb-rte-tb{display:flex;flex-wrap:wrap;align-items:center;gap:2px;border:1px solid var(--border-default);border-bottom:0;border-radius:5px 5px 0 0;padding:4px 6px;background:var(--surface-subtle)}' +
+      '.kb-rte-tb button,.kb-rte-fl button{width:30px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--text-primary);cursor:pointer;font:600 13px inherit;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;padding:0}' +
+      '.kb-rte-tb button:hover,.kb-rte-fl button:hover{background:var(--surface-muted)}' +
+      '.kb-rte-tb .sep,.kb-rte-fl .sep{width:1px;height:18px;background:var(--border-default);margin:0 4px}' +
+      '.kb-rte-ed{outline:none;word-break:break-word}' +
+      '.kb-rte-ed[data-kind="desc"]{min-height:120px;border:1px solid var(--border-default);border-radius:0 0 5px 5px;padding:12px;font-size:14px;line-height:1.55;color:var(--text-primary);background:var(--surface-page)}' +
+      '.kb-rte-ed[data-kind="desc"]:focus{border-color:#B9052D}' +
+      '.kb-rte-ed[data-kind="desc"] ul,.kb-rte-ed[data-kind="desc"] ol{margin:4px 0;padding-left:22px}' +
+      '.kb-rte-ed[data-kind="sub"]{min-height:1.4em;line-height:1.4;padding:0 2px;border-bottom:1px dashed transparent}' +
+      '.kb-rte-ed[data-kind="sub"]:focus{border-bottom-color:var(--border-default)}' +
+      '.kb-rte-ed:empty::before{content:attr(data-ph);color:var(--text-muted);pointer-events:none}' +
+      '.kb-rte-ed div[data-chk]{position:relative;padding-left:26px;min-height:1.55em}' +
+      '.kb-rte-ed div[data-chk]::before{content:"";position:absolute;left:2px;top:.22em;width:14px;height:14px;border:1.5px solid var(--text-muted);border-radius:3px;background:var(--surface-page);cursor:pointer;box-sizing:border-box}' +
+      '.kb-rte-ed div[data-chk="1"]::before{background:#B9052D;border-color:#B9052D}' +
+      '.kb-rte-ed div[data-chk="1"]::after{content:"✓";position:absolute;left:4px;top:.05em;font-size:11px;font-weight:700;color:#fff;pointer-events:none}' +
+      '.kb-rte-ed div[data-chk="1"]{color:var(--text-muted);text-decoration:line-through}' +
+      '.kb-rte-fl{position:fixed;z-index:60;display:flex;align-items:center;gap:2px;background:var(--surface-page);border:1px solid var(--border-default);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:4px 6px}' +
+      '.kb-rte-pop{position:fixed;z-index:61;background:var(--surface-page);border:1px solid var(--border-default);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.16);padding:8px;display:grid;grid-template-columns:repeat(6,22px);gap:6px}' +
+      '.kb-rte-sw{width:22px;height:22px;border-radius:50%;border:1px solid rgba(0,0,0,.15);cursor:pointer;padding:0;position:relative}' +
+      '.kb-rte-sw.none{background:var(--surface-page)}.kb-rte-sw.none::after{content:"";position:absolute;left:2px;right:2px;top:9px;height:2px;background:#B9052D;transform:rotate(-45deg)}' +
+      /* koyu modda: koyu kırmızı yazı açılsın, vurgulu metin koyu kalsın */
+      'html[data-theme="dark"] .kb-rte-ed [style*="background-color"]{color:#1a1a1a}' +
+      'html[data-theme="dark"] .kb-rte-ed [style*="color:rgb(185, 5, 45)"],html[data-theme="dark"] .kb-rte-ed [style*="color:#b9052d"],html[data-theme="dark"] .kb-rte-ed [style*="color: rgb(185, 5, 45)"],html[data-theme="dark"] .kb-rte-ed [style*="color:#B9052D"],html[data-theme="dark"] .kb-rte-ed [style*="color: #B9052D"]{color:#F2557A!important}' +
+      'html[data-theme="dark"] .kb-rte-ed [style*="color: rgb(121, 121, 121)"],html[data-theme="dark"] .kb-rte-ed [style*="color:rgb(121, 121, 121)"]{color:#A0A0A8!important}';
+    (document.head || document.documentElement).appendChild(css);
+
+    var ICON = {
+      color: '<span style="font-weight:600;border-bottom:3px solid #B9052D;line-height:1">A</span>',
+      hilite: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l-6 6v3h3l6-6"/><path d="M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/><rect x="3" y="21" width="18" height="2" fill="#FFE29A" stroke="none"/></svg>',
+      list: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg>',
+      strike: '<span style="text-decoration:line-through;font-weight:500">S</span>',
+      olist: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="10" y1="6" x2="20" y2="6"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="18" x2="20" y2="18"/><text x="2" y="8.5" font-size="7.5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="2" y="14.5" font-size="7.5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="2" y="20.5" font-size="7.5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>',
+      check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1.5"/><polyline points="4.6 7.6 6.2 9.2 8.8 6"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><line x1="13" y1="7.5" x2="21" y2="7.5"/><line x1="13" y1="17.5" x2="21" y2="17.5"/></svg>',
+      clear: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/><line x1="3" y1="3" x2="21" y2="21" stroke="#B9052D"/></svg>'
+    };
+    var saved = null, pop = null, fl = null;
+    function saveSel() { var s = window.getSelection(); if (s.rangeCount) saved = s.getRangeAt(0).cloneRange(); }
+    function restoreSel() { if (!saved) return; var s = window.getSelection(); s.removeAllRanges(); s.addRange(saved); }
+    function edOfSel() { var s = window.getSelection(); var n = s.anchorNode; n = n && (n.nodeType === 1 ? n : n.parentElement); return n && n.closest ? n.closest('.kb-rte-ed') : null; }
+    function exec(cmd, val) {
+      restoreSel();
+      var css = cmd === 'foreColor' || cmd === 'hiliteColor';
+      try { document.execCommand('styleWithCSS', false, css); } catch (e) {}
+      try { document.execCommand(cmd, false, val == null ? null : val); } catch (e) {}
+      try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
+      saveSel();
+      var ed = edOfSel(); if (ed) queueSave(ed, true);
+    }
+    function closePop() { if (pop) { pop.remove(); pop = null; } }
+    function openPop(btn, kind) {
+      closePop();
+      pop = document.createElement('div'); pop.className = 'kb-rte-pop';
+      (kind === 'color' ? TEXT : HILITE).forEach(function (c) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'kb-rte-sw'; b.style.background = c[0]; b.title = c[1];
+        b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        b.addEventListener('click', function () { exec(kind === 'color' ? 'foreColor' : 'hiliteColor', c[0]); closePop(); });
+        pop.appendChild(b);
+      });
+      var none = document.createElement('button'); none.type = 'button'; none.className = 'kb-rte-sw none'; none.title = kind === 'color' ? 'Varsayılan renk' : 'Vurguyu kaldır';
+      none.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      none.addEventListener('click', function () {
+        if (kind === 'color') exec('foreColor', getComputedStyle(edOfSel() || document.body).color); else exec('hiliteColor', 'transparent');
+        closePop();
+      });
+      pop.appendChild(none);
+      document.body.appendChild(pop);
+      var r = btn.getBoundingClientRect();
+      pop.style.top = (r.bottom + 6) + 'px';
+      pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+    }
+    // imlecin bulunduğu satır: editör içindeki en içteki <div>
+    function blockOf(ed, node) {
+      var n = node && (node.nodeType === 1 ? node : node.parentElement);
+      while (n && n !== ed) { if (n.tagName === 'DIV') return n; if (n.tagName === 'LI') return null; n = n.parentElement; }
+      return null;
+    }
+    function toggleCheck() {
+      restoreSel();
+      var ed = edOfSel(); if (!ed || ed.getAttribute('data-kind') !== 'desc') return;
+      var s = window.getSelection(), an = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement);
+      if (an && an.closest && an.closest('li')) return;
+      var b = blockOf(ed, s.anchorNode);
+      if (!b || b.tagName !== 'DIV') {
+        try { document.execCommand('formatBlock', false, 'div'); } catch (e) {}
+        s = window.getSelection(); b = blockOf(ed, s.anchorNode);
+      }
+      if (!b || b.tagName !== 'DIV') return;
+      var range = s.rangeCount ? s.getRangeAt(0) : null, blocks = [b];
+      if (range && !range.collapsed) {
+        blocks = Array.prototype.filter.call(ed.querySelectorAll('div'), function (d) { return range.intersectsNode(d) && !d.querySelector('div,ul,ol'); });
+        if (!blocks.length) blocks = [b];
+      }
+      var on = !b.hasAttribute('data-chk');
+      blocks.forEach(function (x) { if (on) x.setAttribute('data-chk', '0'); else x.removeAttribute('data-chk'); });
+      saveSel(); queueSave(ed, true);
+    }
+    function makeButtons(bar, withList) {
+      var defs = [['bold', '<b>B</b>', 'Kalın (Ctrl+B)'], ['italic', '<i style="font-weight:500">I</i>', 'İtalik (Ctrl+I)'], ['underline', '<span style="text-decoration:underline;font-weight:500">U</span>', 'Altı çizili (Ctrl+U)'], ['strikeThrough', ICON.strike, 'Üstü çizili'], ['|'],
+        ['@color', ICON.color, 'Yazı rengi'], ['@hilite', ICON.hilite, 'Vurgula']];
+      if (withList) defs.push(['|'], ['insertUnorderedList', ICON.list, 'Madde işaretli liste'], ['insertOrderedList', ICON.olist, 'Numaralı liste'], ['@@check', ICON.check, 'Onay kutulu liste']);
+      defs.push(['removeFormat', ICON.clear, 'Biçimi temizle']);
+      defs.forEach(function (d) {
+        if (d[0] === '|') { var sp = document.createElement('span'); sp.className = 'sep'; bar.appendChild(sp); return; }
+        var b = document.createElement('button'); b.type = 'button'; b.innerHTML = d[1]; b.title = d[2]; b.setAttribute('aria-label', d[2]);
+        b.addEventListener('mousedown', function (e) { e.preventDefault(); saveSel(); });
+        b.addEventListener('click', function () {
+          if (d[0] === '@@check') toggleCheck();
+          else if (d[0].charAt(0) === '@') { if (pop) { closePop(); return; } openPop(b, d[0].slice(1)); }
+          else if (d[0] === 'removeFormat') { exec('removeFormat'); exec('hiliteColor', 'transparent'); }
+          else exec(d[0]);
+        });
+        bar.appendChild(b);
+      });
+    }
+    document.addEventListener('mousedown', function (e) { if (pop && !pop.contains(e.target) && !(e.target.closest && e.target.closest('.kb-rte-tb,.kb-rte-fl'))) closePop(); }, true);
+
+    // kaydet
+    function queueSave(ed, soon) {
+      clearTimeout(ed.__t);
+      ed.__t = setTimeout(function () { flush(ed); }, soon ? 50 : 500);
+    }
+    function flush(ed) {
+      clearTimeout(ed.__t);
+      var host = ed.__host; if (!host || !host.isConnected) return;
+      var html = sanitize(ed.innerHTML), text = textOf(ed);
+      if (html === host.__last) return;
+      host.__last = html;
+      try { if (api().set) api().set(host.__kind, host.__key, html, text); } catch (e) {}
+    }
+
+    function build(host) {
+      var kind = host.getAttribute('data-kind'), key = host.getAttribute('data-key');
+      host.__kind = kind; host.__key = key;
+      host.textContent = '';
+      if (kind === 'desc') { var tb = document.createElement('div'); tb.className = 'kb-rte-tb'; tb.setAttribute('role', 'toolbar'); tb.setAttribute('aria-label', 'Metin biçimlendirme'); makeButtons(tb, true); host.appendChild(tb); }
+      var ed = document.createElement('div');
+      ed.className = 'kb-rte-ed'; ed.setAttribute('data-kind', kind); ed.contentEditable = 'true'; ed.spellcheck = true;
+      ed.setAttribute('data-ph', host.getAttribute('data-ph') || '');
+      ed.setAttribute('role', 'textbox'); ed.setAttribute('aria-multiline', kind === 'desc' ? 'true' : 'false');
+      ed.__host = host;
+      var v = api().get ? api().get(kind, key) : '';
+      host.__last = sanitize(v || ''); ed.innerHTML = host.__last;
+      ed.addEventListener('input', function () { if (!textOf(ed) && !/<li/i.test(ed.innerHTML)) ed.innerHTML = ''; queueSave(ed); });
+      ed.addEventListener('blur', function () { flush(ed); });
+      ed.addEventListener('mousedown', function (e) {
+        var t = e.target;
+        if (t && t.matches && t.matches('div[data-chk]') && e.offsetX < 22) {
+          e.preventDefault();
+          t.setAttribute('data-chk', t.getAttribute('data-chk') === '1' ? '0' : '1');
+          queueSave(ed, true);
+        }
+      });
+      ed.addEventListener('keydown', function (e) {
+        if (kind === 'sub' && e.key === 'Enter') { e.preventDefault(); ed.blur(); }
+        if (kind === 'desc' && e.key === 'Enter' && !e.shiftKey) {
+          var bl = blockOf(ed, window.getSelection().anchorNode);
+          if (bl && bl.hasAttribute && bl.hasAttribute('data-chk')) {
+            if (!bl.textContent.trim()) { e.preventDefault(); bl.removeAttribute('data-chk'); queueSave(ed, true); return; }
+            setTimeout(function () { var nb = blockOf(ed, window.getSelection().anchorNode); if (nb && nb !== bl && nb.hasAttribute('data-chk')) nb.setAttribute('data-chk', '0'); }, 0);
+          }
+        }
+        if (e.key === 'Escape') { e.stopPropagation(); ed.blur(); }
+      });
+      ed.addEventListener('paste', function (e) {
+        var cd = e.clipboardData; if (!cd) return;
+        var hasFile = Array.prototype.some.call(cd.items || [], function (it) { return it.kind === 'file'; });
+        if (hasFile) return;                         // görseller göreve ek olarak yapıştırılır
+        e.preventDefault(); e.stopPropagation();
+        var txt = cd.getData('text/plain') || '';
+        if (kind === 'sub') txt = txt.replace(/\s*\n+\s*/g, ' ');
+        try { document.execCommand('insertText', false, txt); } catch (err) {}
+      });
+      host.appendChild(ed);
+      host.__built = key;
+    }
+    function scan() {
+      document.querySelectorAll('.kb-rte-host').forEach(function (host) {
+        if (host.__built !== host.getAttribute('data-key') || !host.querySelector('.kb-rte-ed')) build(host);
+      });
+    }
+    // şablon her çizildiğinde: odakta olmayan editörleri kayıttaki değerle eşitle
+    window.__kbRteRefresh = function () {
+      scan();
+      document.querySelectorAll('.kb-rte-host').forEach(function (host) {
+        var ed = host.querySelector('.kb-rte-ed'); if (!ed || document.activeElement === ed) return;
+        var v = sanitize((api().get && api().get(host.__kind, host.__key)) || '');
+        if (v !== host.__last) { host.__last = v; ed.innerHTML = v; }
+      });
+    };
+    new MutationObserver(function () { scan(); }).observe(document.documentElement, { childList: true, subtree: true });
+
+    // alt görevlerde seçince açılan çubuk
+    function hideFl() { if (fl) fl.style.display = 'none'; }
+    function placeFl() {
+      var s = window.getSelection();
+      if (!s.rangeCount || s.isCollapsed) { hideFl(); return; }
+      var ed = edOfSel();
+      if (!ed || ed.getAttribute('data-kind') !== 'sub') { hideFl(); return; }
+      if (!fl) {
+        fl = document.createElement('div'); fl.className = 'kb-rte-fl'; fl.setAttribute('role', 'toolbar'); fl.setAttribute('aria-label', 'Metin biçimlendirme');
+        makeButtons(fl, false); document.body.appendChild(fl);
+      }
+      fl.style.display = 'flex';
+      var r = s.getRangeAt(0).getBoundingClientRect(), w = fl.offsetWidth, h = fl.offsetHeight;
+      var top = r.top - h - 8; if (top < 8) top = r.bottom + 8;
+      fl.style.top = top + 'px'; fl.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8)) + 'px';
+      saveSel();
+    }
+    document.addEventListener('selectionchange', function () {
+      if (pop || (document.activeElement && document.activeElement.closest && document.activeElement.closest('.kb-rte-fl'))) return;
+      placeFl();
+    });
+    document.addEventListener('scroll', function () { if (fl && fl.style.display !== 'none') placeFl(); }, true);
+  })();
+
   function boot() {
     ready.then(function () {
       if (!client()) return;
