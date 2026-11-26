@@ -66,7 +66,7 @@
         .catch(function () {});
     }
     setTimeout(check, 15000);
-    setInterval(check, 3 * 60 * 1000);
+    setInterval(check, 60 * 1000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
     window.addEventListener('focus', check);
   })();
