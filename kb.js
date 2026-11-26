@@ -935,7 +935,13 @@
         }
       });
       ed.addEventListener('keydown', function (e) {
-        if (kind === 'sub' && e.key === 'Enter') { e.preventDefault(); ed.blur(); }
+        if (kind === 'sub' && e.key === 'Enter') {
+          e.preventDefault();
+          if (e.shiftKey) {   // Shift+Enter: aynı alt görevde yeni satır
+            try { if (!document.execCommand('insertLineBreak')) document.execCommand('insertHTML', false, '<br><br>'); } catch (err) {}
+            queueSave(ed);
+          } else ed.blur();
+        }
         if (kind === 'desc' && e.key === 'Enter' && !e.shiftKey) {
           var bl = blockOf(ed, window.getSelection().anchorNode);
           if (bl && bl.hasAttribute && bl.hasAttribute('data-chk')) {
