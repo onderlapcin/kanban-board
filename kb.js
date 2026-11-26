@@ -742,7 +742,8 @@
   (function () {
     var TEXT = [['#B9052D', 'Kırmızı'], ['#0087A0', 'Petrol'], ['#E67319', 'Turuncu'], ['#2E8B57', 'Yeşil'], ['#797979', 'Gri']];
     var HILITE = [['#FFE29A', 'Sarı'], ['#B8E0C8', 'Nane'], ['#B5D8F5', 'Açık mavi'], ['#F4B6C2', 'Pembe'], ['#C9B6E4', 'Lavanta']];
-    var ALLOWED = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', S: 's', STRIKE: 's', DEL: 's', BR: 'br', DIV: 'div', P: 'div', UL: 'ul', OL: 'ol', LI: 'li', SPAN: 'span', FONT: 'span', MARK: 'span' };
+    var ALLOWED = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', S: 's', STRIKE: 's', DEL: 's', BR: 'br', DIV: 'div', P: 'div', UL: 'ul', OL: 'ol', LI: 'li', SPAN: 'span', FONT: 'span', MARK: 'span', A: 'a' };
+    function okHref(h) { h = String(h || '').trim(); return /^(https?:\/\/|mailto:)/i.test(h) ? h : ''; }
     var COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|transparent)$/i;
     function cleanStyle(el) {
       var out = [], st = el.style;
@@ -764,7 +765,9 @@
           if (n.nodeType !== 1) return;
           var tag = ALLOWED[n.tagName];
           if (!tag) { walk(n, to); return; }       // bilinmeyen etiket: içeriği kalsın, etiketi gitsin
+          if (tag === 'a' && !okHref(n.getAttribute('href'))) { walk(n, to); return; }
           var el = document.createElement(tag);
+          if (tag === 'a') { el.setAttribute('href', okHref(n.getAttribute('href'))); el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
           var s = cleanStyle(n);
           if (tag === 'span') { if (!s) { walk(n, to); return; } el.setAttribute('style', s); }
           else if (s && tag !== 'br') el.setAttribute('style', s);
@@ -792,6 +795,13 @@
       '.kb-rte-ed[data-kind="desc"] ul,.kb-rte-ed[data-kind="desc"] ol{margin:4px 0;padding-left:22px}' +
       '.kb-rte-ed[data-kind="sub"]{min-height:1.4em;line-height:1.4;padding:0 2px;border-bottom:1px dashed transparent}' +
       '.kb-rte-ed[data-kind="sub"]:focus{border-bottom-color:var(--border-default)}' +
+      '.kb-rte-ed a{color:var(--text-accent);text-decoration:underline;text-underline-offset:2px;cursor:pointer;word-break:break-all}' +
+      '.kb-rte-lp{position:fixed;z-index:62;background:var(--surface-page);border:1px solid var(--border-default);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px;display:flex;flex-direction:column;gap:8px;width:300px;max-width:calc(100vw - 16px);font-size:12px;color:var(--text-secondary)}' +
+      '.kb-rte-lp input{width:100%;padding:6px 8px;border:1px solid var(--border-default);border-radius:4px;font:inherit;font-size:13px;color:var(--text-primary);background:var(--surface-page);outline:none}.kb-rte-lp input:focus{border-color:#B9052D}' +
+      '.kb-rte-lp .row{display:flex;gap:8px;justify-content:flex-end;align-items:center}' +
+      '.kb-rte-lp button{border:1px solid var(--border-default);background:var(--surface-page);color:var(--text-primary);border-radius:4px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}' +
+      '.kb-rte-lp button.pri{background:#B9052D;border-color:#B9052D;color:#fff;font-weight:600}.kb-rte-lp button.lnk{border:0;padding:4px 6px;color:var(--text-accent);background:transparent}' +
+      '.kb-rte-lp .host{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary)}' +
       '.kb-rte-ed:empty::before{content:attr(data-ph);color:var(--text-muted);pointer-events:none}' +
       '.kb-rte-ed div[data-chk]{position:relative;padding-left:26px;min-height:1.55em}' +
       '.kb-rte-ed div[data-chk]::before{content:"";position:absolute;left:2px;top:.22em;width:14px;height:14px;border:1.5px solid var(--text-muted);border-radius:3px;background:var(--surface-page);cursor:pointer;box-sizing:border-box}' +
@@ -815,6 +825,7 @@
       strike: '<span style="text-decoration:line-through;font-weight:500">S</span>',
       olist: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="10" y1="6" x2="20" y2="6"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="18" x2="20" y2="18"/><text x="2" y="8.5" font-size="7.5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="2" y="14.5" font-size="7.5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="2" y="20.5" font-size="7.5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>',
       check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1.5"/><polyline points="4.6 7.6 6.2 9.2 8.8 6"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><line x1="13" y1="7.5" x2="21" y2="7.5"/><line x1="13" y1="17.5" x2="21" y2="17.5"/></svg>',
+      link: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>',
       clear: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/><line x1="3" y1="3" x2="21" y2="21" stroke="#B9052D"/></svg>'
     };
     var saved = null, pop = null, fl = null;
@@ -831,6 +842,67 @@
       var ed = edOfSel(); if (ed) queueSave(ed, true);
     }
     function closePop() { if (pop) { pop.remove(); pop = null; } }
+    function shortUrl(u) {
+      try { var x = new URL(u); var p = x.pathname.replace(/\/+$/, ''); var seg = p.split('/').filter(Boolean)[0];
+        return x.hostname.replace(/^www\./, '') + (seg ? '/' + (seg.length > 18 ? seg.slice(0, 18) + '…' : seg) + (p.split('/').filter(Boolean).length > 1 || x.search ? '/…' : '') : (x.search ? '/…' : ''));
+      } catch (e) { return u.length > 40 ? u.slice(0, 40) + '…' : u; }
+    }
+    function normUrl(u) { u = String(u || '').trim(); if (!u) return ''; if (/^www\./i.test(u)) u = 'https://' + u; if (!/^[a-z]+:/i.test(u) && /\./.test(u)) u = 'https://' + u; return okHref(u); }
+    function anchorOfSel() { var s = window.getSelection(); if (!s.rangeCount) return null; var n = s.anchorNode; n = n && (n.nodeType === 1 ? n : n.parentElement); return n && n.closest ? n.closest('.kb-rte-ed a') : null; }
+    function escHtml(v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function openLinkPop(rect, existing) {
+      closePop();
+      restoreSel();
+      var ed = edOfSel(); if (!ed) return;
+      var a = existing || anchorOfSel(), s = window.getSelection();
+      if (a) { var r = document.createRange(); r.selectNodeContents(a); s.removeAllRanges(); s.addRange(r); }
+      saveSel();
+      var selText = s.toString();
+      pop = document.createElement('div'); pop.className = 'kb-rte-lp';
+      var t = document.createElement('input'); t.placeholder = 'Görünen metin (ör. Clearance raporu)'; t.value = selText;
+      var u = document.createElement('input'); u.placeholder = 'Bağlantı (https://…)'; u.value = a ? a.getAttribute('href') : (/^https?:\/\//i.test(selText.trim()) ? selText.trim() : '');
+      if (u.value && t.value.trim() === u.value.trim()) t.value = '';
+      var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'pri'; ok.textContent = a ? 'Güncelle' : 'Ekle';
+      var cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Vazgeç';
+      var row = document.createElement('div'); row.className = 'row';
+      if (a) { var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'lnk'; rm.textContent = 'Bağlantıyı kaldır'; rm.style.marginRight = 'auto';
+        rm.addEventListener('click', function () { restoreSel(); try { document.execCommand('unlink'); } catch (e) {} closePop(); queueSave(ed, true); ed.focus(); }); row.appendChild(rm); }
+      row.appendChild(cancel); row.appendChild(ok);
+      var l1 = document.createElement('span'); l1.textContent = 'Metin'; var l2 = document.createElement('span'); l2.textContent = 'Bağlantı';
+      [l1, t, l2, u, row].forEach(function (x) { pop.appendChild(x); });
+      function apply() {
+        var href = normUrl(u.value); if (!href) { u.focus(); u.style.borderColor = '#B9052D'; return; }
+        var txt = t.value.trim() || shortUrl(href);
+        restoreSel(); ed.focus(); restoreSel();
+        try { document.execCommand('insertHTML', false, '<a href="' + escHtml(href) + '" target="_blank" rel="noopener noreferrer">' + escHtml(txt) + '</a>&nbsp;'); } catch (e) {}
+        closePop(); queueSave(ed, true);
+      }
+      ok.addEventListener('click', apply);
+      cancel.addEventListener('click', function () { closePop(); restoreSel(); ed.focus(); });
+      [t, u].forEach(function (inp) { inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); apply(); } if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePop(); restoreSel(); ed.focus(); } }); });
+      document.body.appendChild(pop);
+      pop.style.top = Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 8) + 'px';
+      pop.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+      (u.value ? t : u).focus();
+    }
+    function openLinkBubble(a, ed) {
+      closePop();
+      var r = document.createRange(); r.selectNodeContents(a); saved = r;
+      pop = document.createElement('div'); pop.className = 'kb-rte-lp'; pop.style.flexDirection = 'row'; pop.style.alignItems = 'center'; pop.style.width = 'auto';
+      var host = document.createElement('span'); host.className = 'host'; host.textContent = a.getAttribute('href'); host.title = a.getAttribute('href');
+      var open = document.createElement('button'); open.type = 'button'; open.className = 'pri'; open.textContent = 'Aç';
+      open.addEventListener('click', function () { window.open(a.getAttribute('href'), '_blank', 'noopener'); closePop(); });
+      var edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Düzenle';
+      var rc = a.getBoundingClientRect();
+      edit.addEventListener('click', function () { openLinkPop(rc, a); });
+      var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'lnk'; rm.textContent = 'Kaldır';
+      rm.addEventListener('click', function () { var s = window.getSelection(); ed.focus(); s.removeAllRanges(); s.addRange(r); try { document.execCommand('unlink'); } catch (e) {} closePop(); queueSave(ed, true); });
+      [host, open, edit, rm].forEach(function (x) { pop.appendChild(x); });
+      document.body.appendChild(pop);
+      pop.style.maxWidth = Math.min(420, window.innerWidth - 16) + 'px';
+      pop.style.top = (rc.bottom + 6) + 'px';
+      pop.style.left = Math.max(8, Math.min(rc.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+    }
     function openPop(btn, kind) {
       closePop();
       pop = document.createElement('div'); pop.className = 'kb-rte-pop';
@@ -882,6 +954,7 @@
       var defs = [['bold', '<b>B</b>', 'Kalın (Ctrl+B)'], ['italic', '<i style="font-weight:500">I</i>', 'İtalik (Ctrl+I)'], ['underline', '<span style="text-decoration:underline;font-weight:500">U</span>', 'Altı çizili (Ctrl+U)'], ['strikeThrough', ICON.strike, 'Üstü çizili'], ['|'],
         ['@color', ICON.color, 'Yazı rengi'], ['@hilite', ICON.hilite, 'Vurgula']];
       if (withList) defs.push(['|'], ['insertUnorderedList', ICON.list, 'Madde işaretli liste'], ['insertOrderedList', ICON.olist, 'Numaralı liste'], ['@@check', ICON.check, 'Onay kutulu liste']);
+      defs.push(['@@link', ICON.link, 'Bağlantı ekle (Ctrl+K)']);
       defs.push(['removeFormat', ICON.clear, 'Biçimi temizle']);
       defs.forEach(function (d) {
         if (d[0] === '|') { var sp = document.createElement('span'); sp.className = 'sep'; bar.appendChild(sp); return; }
@@ -889,6 +962,7 @@
         b.addEventListener('mousedown', function (e) { e.preventDefault(); saveSel(); });
         b.addEventListener('click', function () {
           if (d[0] === '@@check') toggleCheck();
+          else if (d[0] === '@@link') { if (pop) { closePop(); return; } openLinkPop(b.getBoundingClientRect()); }
           else if (d[0].charAt(0) === '@') { if (pop) { closePop(); return; } openPop(b, d[0].slice(1)); }
           else if (d[0] === 'removeFormat') { exec('removeFormat'); exec('hiliteColor', 'transparent'); }
           else exec(d[0]);
@@ -926,6 +1000,13 @@
       host.__last = sanitize(v || ''); ed.innerHTML = host.__last;
       ed.addEventListener('input', function () { if (!textOf(ed) && !/<li/i.test(ed.innerHTML)) ed.innerHTML = ''; queueSave(ed); });
       ed.addEventListener('blur', function () { flush(ed); });
+      ed.addEventListener('click', function (e) {
+        var a = e.target && e.target.closest && e.target.closest('a');
+        if (!a || !ed.contains(a)) return;
+        e.preventDefault();
+        if (e.ctrlKey || e.metaKey) { window.open(a.getAttribute('href'), '_blank', 'noopener'); return; }
+        openLinkBubble(a, ed);
+      });
       ed.addEventListener('mousedown', function (e) {
         var t = e.target;
         if (t && t.matches && t.matches('div[data-chk]') && e.offsetX < 22) {
@@ -949,6 +1030,7 @@
             setTimeout(function () { var nb = blockOf(ed, window.getSelection().anchorNode); if (nb && nb !== bl && nb.hasAttribute('data-chk')) nb.setAttribute('data-chk', '0'); }, 0);
           }
         }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); saveSel(); var rr = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).getBoundingClientRect() : ed.getBoundingClientRect(); if (!rr.width && !rr.height) rr = ed.getBoundingClientRect(); openLinkPop(rr); return; }
         if (e.key === 'Escape') { e.stopPropagation(); ed.blur(); }
       });
       ed.addEventListener('paste', function (e) {
@@ -957,6 +1039,14 @@
         if (hasFile) return;                         // görseller göreve ek olarak yapıştırılır
         e.preventDefault(); e.stopPropagation();
         var txt = cd.getData('text/plain') || '';
+        var one = txt.trim();
+        if (/^(https?:\/\/|www\.)\S+$/i.test(one)) {          // yalnızca bir bağlantı yapıştırıldı: kısa, tıklanabilir bağlantı yap
+          var href = normUrl(one), sel = window.getSelection(), label = sel.toString().trim();
+          if (href) {
+            try { document.execCommand('insertHTML', false, '<a href="' + escHtml(href) + '" target="_blank" rel="noopener noreferrer">' + escHtml(label || shortUrl(href)) + '</a>&nbsp;'); } catch (err) {}
+            queueSave(ed, true); return;
+          }
+        }
         if (kind === 'sub') txt = txt.replace(/\s*\n+\s*/g, ' ');
         try { document.execCommand('insertText', false, txt); } catch (err) {}
       });
