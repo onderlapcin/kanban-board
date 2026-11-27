@@ -326,7 +326,7 @@
     var p = plan(pid), E = canEdit(pid);
     var h = '<div class="pl-in wide"><div class="pl-tools"><div class="pl-seg"><button type="button" data-pa="tl" data-v="gantt" class="' + (UI.tl === 'gantt' ? 'on' : '') + '">Gantt</button><button type="button" data-pa="tl" data-v="v" class="' + (UI.tl === 'v' ? 'on' : '') + '">V-döngüsü</button></div>' +
       (UI.tl === 'gantt' ? '<div class="pl-seg"><button type="button" data-pa="zoom" data-v="month" class="' + (UI.zoom === 'month' ? 'on' : '') + '">Ay</button><button type="button" data-pa="zoom" data-v="quarter" class="' + (UI.zoom === 'quarter' ? 'on' : '') + '">Çeyrek</button></div>' : '') +
-      '<span class="pl-sp"></span>' + (E ? '<button type="button" class="pl-btn sm" data-pa="modal" data-m="phases">Fazlar</button><button type="button" class="pl-btn sm" data-pa="modal" data-m="wps">İş paketleri</button><button type="button" class="pl-btn sm" data-pa="modal" data-m="milestones">Kilometre taşları</button>' : '') + '</div>';
+      '<span class="pl-sp"></span>' + (E ? (UI.tl === 'gantt' && (p.phases.length > 1 || p.wps.length > 1) ? '<button type="button" class="pl-btn sm" data-pa="sortall" title="Fazları ve iş paketlerini başlangıç tarihine göre sıralar">Başlangıca göre sırala</button>' : '') + '<button type="button" class="pl-btn sm" data-pa="modal" data-m="phases">Fazlar</button><button type="button" class="pl-btn sm" data-pa="modal" data-m="wps">İş paketleri</button><button type="button" class="pl-btn sm" data-pa="modal" data-m="milestones">Kilometre taşları</button>' : '') + '</div>';
     if (UI.tl === 'gantt') {
       if (!p.phases.length && !p.wps.length && !p.milestones.length) h += '<div class="pl-empty"><b>Zaman çizelgesi boş.</b><span>Proje fazlarını (Konsept, Ön tasarım, Detay tasarım…), iş paketlerini ve gate/kilometre taşlarını ekle; Gantt otomatik çizilir.</span>' + (E ? '<div class="pl-row g8"><button type="button" class="pl-btn pri" data-pa="modal" data-m="phases">Faz ekle</button><button type="button" class="pl-btn" data-pa="phasesStd">Standart fazları ekle</button></div>' : '') + '</div>';
       else h += gantt(pid);
@@ -358,13 +358,14 @@
     }
     var T = todayStr(), tx = xd(T), showT = tx >= 0 && tx <= W;
     var today = showT ? '<div class="g-today" style="left:' + P(tx) + '"></div>' : '';
-    function row(lab, cls, inner) { return '<div class="g-lab ' + cls + '">' + lab + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + today + inner + '</div>'; }
+    var DR = canEdit(pid);
+    function row(lab, cls, inner, dk, id, grp) { return '<div class="g-lab ' + cls + '"' + (dk ? ' data-gk="' + dk + '" data-gid="' + esc(id) + '" data-grp="' + esc(grp || '') + '"' + (DR ? ' draggable="true"' : '') : (grp != null ? ' data-gk="grp" data-grp="' + esc(grp) + '"' : '')) + '>' + (dk && DR ? '<span class="g-grip" aria-hidden="true">⋮⋮</span>' : '') + lab + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + today + inner + '</div>'; }
     function bar(w, color) {
       if (!w.start) return '';
       var a = x(w.start), b = x(w.end || w.start, 1);
       return '<div class="g-bar" title="' + esc((w.code ? w.code + ' · ' : '') + (w.name || '') + ' · %' + (+w.pct || 0)) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + color + '"><span class="fill" style="width:' + (+w.pct || 0) + '%"></span><span class="tx">' + (b - a > 110 ? esc(pname(w.owner)) : '') + '</span></div>';
     }
-    function wpRow(w, color) { return row('<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="g-nm">' + esc(w.name || '') + '</span><small>%' + (+w.pct || 0) + '</small>', 'wp', bar(w, color)); }
+    function wpRow(w, color, grp) { return row('<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="g-nm">' + esc(w.name || '') + '</span><small>%' + (+w.pct || 0) + '</small>', 'wp', bar(w, color), 'wp', w.id, grp); }
     var h = '<div class="gantt"><div class="g-wrap"><div class="g-tbl" style="grid-template-columns:max-content minmax(' + W + 'px,1fr)">';
     h += '<div class="g-lab g-head">Faz / iş paketi</div><div class="g-tl g-head"><div class="g-months">' + months + '</div>' + (showT ? '<div class="g-today-l" style="left:' + P(tx) + '">BUGÜN</div>' : '') + '</div>';
     if (p.milestones.length) h += row('Kilometre taşları', 'ph', p.milestones.filter(function (m) { return m.date; }).map(function (m) { var xx = xd(m.date); return '<span class="g-ms" title="' + esc((m.code ? m.code + ' · ' : '') + (m.name || '') + ' · ' + fmtD(m.date)) + '" style="left:' + P(xx) + ';background:' + (m.done ? '#2E8B57' : 'var(--surface-page)') + '"></span><span class="g-ms-l" style="left:calc(' + P(xx) + ' + 12px)">' + esc(m.code || m.name || '') + '</span>'; }).join(''));
@@ -372,16 +373,16 @@
     p.phases.forEach(function (ph) {
       var c = ph.color || '#797979';
       var a = ph.start ? x(ph.start) : 0, b = ph.end ? x(ph.end) : a;
-      h += row('<span class="pl-sw" style="background:' + c + '"></span>' + esc(ph.name || '') + '<small>' + (ph.start ? fmtM(ph.start) + ' – ' + fmtM(ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + c + '"></div>' : '');
+      h += row('<span class="pl-sw" style="background:' + c + '"></span>' + esc(ph.name || '') + '<small>' + (ph.start ? fmtM(ph.start) + ' – ' + fmtM(ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + c + '"></div>' : '', 'phase', ph.id, ph.id);
       p.wps.forEach(function (w) {
         if (used[w.id]) return;
         var manual = w.phase && p.phases.some(function (x) { return x.id === w.phase; });
         var hit = manual ? w.phase === ph.id : (w.start && ph.start && ph.end && w.start >= ph.start && w.start < ph.end);
-        if (hit) { used[w.id] = 1; h += wpRow(w, c); }
+        if (hit) { used[w.id] = 1; h += wpRow(w, c, ph.id); }
       });
     });
     var rest = p.wps.filter(function (w) { return !used[w.id]; });
-    if (rest.length) { if (p.phases.length) h += row('Diğer iş paketleri', 'ph', ''); rest.forEach(function (w) { h += wpRow(w, '#0087A0'); }); }
+    if (rest.length) { if (p.phases.length) h += row('Diğer iş paketleri', 'ph', '', null, null, ''); rest.forEach(function (w) { h += wpRow(w, '#0087A0', ''); }); }
     h += '</div></div></div><div class="pl-legend"><span><i class="dia" style="background:#2E8B57"></i>Tamamlanan kilometre taşı</span><span><i class="dia" style="background:var(--surface-page);border:1px solid var(--text-secondary)"></i>Planlanan kilometre taşı</span><span><i style="background:rgba(0,0,0,.3)"></i>Çubuğun koyu kısmı: gerçekleşen ilerleme</span><span><i style="background:#B9052D"></i>Bugün</span></div>';
     return h;
   }
@@ -603,11 +604,11 @@
     info: { title: 'Proje bilgileri', form: true },
     systems: { title: 'Sistemler', list: 'systems', add: function () { return { id: uid(), name: '', owner: '' }; },
       cols: [['name', 'Sistem adı', 'text', 'ör. Batarya termal yönetimi'], ['owner', 'Sorumlu', 'member']] },
-    wps: { title: 'İş paketleri', list: 'wps', add: function (p) { return { id: uid(), code: 'WP' + (p.wps.length + 1), name: '', owner: '', start: '', end: '', pct: 0, v: '' }; },
+    wps: { title: 'İş paketleri', list: 'wps', sortKey: 'start', sortLabel: 'Başlangıca göre sırala', add: function (p) { return { id: uid(), code: 'WP' + (p.wps.length + 1), name: '', owner: '', start: '', end: '', pct: 0, v: '' }; },
       cols: [['code', 'Kod', 'text', 'WP1', 70], ['name', 'İş paketi', 'text', 'ör. 3B paketleme ve yerleşim'], ['owner', 'Sorumlu', 'member'], ['start', 'Başlangıç', 'month'], ['end', 'Bitiş', 'month'], ['pct', '%', 'num', '', 64], ['phase', 'Faz', 'phase'], ['v', 'V-döngüsü adımı', 'vstep']] },
-    phases: { title: 'Proje fazları', list: 'phases', add: function () { return { id: uid(), name: '', start: '', end: '', color: '#0087A0' }; },
+    phases: { title: 'Proje fazları', list: 'phases', sortKey: 'start', sortLabel: 'Başlangıca göre sırala', add: function () { return { id: uid(), name: '', start: '', end: '', color: '#0087A0' }; },
       cols: [['name', 'Faz', 'text', 'ör. Detay tasarım'], ['start', 'Başlangıç', 'month'], ['end', 'Bitiş', 'month'], ['color', 'Renk', 'color']] },
-    milestones: { title: 'Kilometre taşları / gate\'ler', list: 'milestones', add: function () { return { id: uid(), code: '', name: '', date: '', done: false }; },
+    milestones: { title: 'Kilometre taşları / gate\'ler', list: 'milestones', sortKey: 'date', sortLabel: 'Tarihe göre sırala', add: function () { return { id: uid(), code: '', name: '', date: '', done: false }; },
       cols: [['code', 'Kod', 'text', 'G3', 70], ['name', 'Ad', 'text', 'ör. Tasarım dondurma'], ['date', 'Tarih', 'date'], ['done', 'Tamamlandı', 'chk']] }
   };
   function modalEl() { return document.getElementById('kbpl-modal'); }
@@ -631,9 +632,9 @@
         '<div class="wide pl-flab">Kısa özet / kapsamımız<div class="pl-notes kb-rte-ed" data-kind="plan" data-b="info.summaryHtml" data-t="html" data-text="info.summary" contenteditable="true" data-ph="Projenin amacı ve bizim kapsamımız">' + clean(I.summaryHtml != null ? I.summaryHtml : esc(I.summary || '').replace(/\n/g, '<br>')) + '</div></div></div>';
     } else {
       var L = p[M.list];
-      h += L.length ? '<div class="pl-scroll"><table class="pl-tbl ed"><thead><tr>' + M.cols.map(function (c) { return '<th' + (c[4] ? ' style="width:' + c[4] + 'px"' : '') + '>' + esc(c[1]) + '</th>'; }).join('') + '<th style="width:36px"></th></tr></thead><tbody>' +
+      h += L.length ? '<div class="pl-scroll"><table class="pl-tbl ed"><thead><tr><th style="width:24px"></th>' + M.cols.map(function (c) { return '<th' + (c[4] ? ' style="width:' + c[4] + 'px"' : '') + '>' + esc(c[1]) + '</th>'; }).join('') + '<th style="width:36px"></th></tr></thead><tbody>' +
         L.map(function (row, i) {
-          return '<tr>' + M.cols.map(function (c) {
+          return '<tr data-mrow="' + i + '"><td class="pl-grip" draggable="true" title="Sürükleyerek sırala" aria-label="Sürükleyerek sırala">⋮⋮</td>' + M.cols.map(function (c) {
             var b = M.list + '.' + i + '.' + c[0], v = row[c[0]];
             if (c[2] === 'member') return '<td>' + sel(b, v, memberOpts(pid)) + '</td>';
             if (c[2] === 'phase') return '<td>' + sel(b, v, [['', 'Otomatik (başlangıca göre)']].concat(p.phases.map(function (x) { return [x.id, x.name || 'Adsız faz']; }))) + '</td>';
@@ -644,7 +645,7 @@
             return '<td><input' + (c[2] !== 'text' ? ' type="' + c[2] + '"' : '') + ' data-b="' + b + '" value="' + esc(v || '') + '" placeholder="' + esc(c[3] || '') + '"></td>';
           }).join('') + '<td>' + delBtn(M.list, i) + '</td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="pl-muted">Henüz kayıt yok.</div>';
-      h += '<div class="pl-row g8"><button type="button" class="pl-btn" data-pa="addm">+ Satır ekle</button>' + (M.list === 'phases' && !L.length ? '<button type="button" class="pl-btn" data-pa="phasesStd">Standart otomotiv fazları</button>' : '') + (M.list === 'wps' ? '<button type="button" class="pl-btn" data-pa="wpsStd" title="' + esc(STD_WPS.map(function (x) { return x[0]; }).join(' · ')) + '">Hazır iş paketlerini ekle</button>' : '') + '</div>';
+      h += '<div class="pl-row g8"><button type="button" class="pl-btn" data-pa="addm">+ Satır ekle</button>' + (M.list === 'phases' && !L.length ? '<button type="button" class="pl-btn" data-pa="phasesStd">Standart otomotiv fazları</button>' : '') + (L.length > 1 && M.sortKey ? '<button type="button" class="pl-btn" data-pa="sortm">' + esc(M.sortLabel) + '</button>' : '') + (M.list === 'wps' ? '<button type="button" class="pl-btn" data-pa="wpsStd" title="' + esc(STD_WPS.map(function (x) { return x[0]; }).join(' · ')) + '">Hazır iş paketlerini ekle</button>' : '') + '</div>';
       if (M.list === 'wps') h += '<div class="pl-muted sm">Faz "Otomatik" ise iş paketi, başlangıç ayının düştüğü fazın altında gösterilir; elle seçersen Gantt seçtiğin fazı kullanır. Görevler, görev penceresindeki "İş paketi" alanından bu paketlere bağlanır. V-döngüsü adımı seçilen paketler V-döngüsü görünümünde ilerlemeyi besler.</div>';
       if (M.list === 'systems') h += '<div class="pl-muted sm">Görevler, görev penceresindeki "Sistem" alanından bu sistemlere bağlanır; tasarım kartları da sistemlere göre gruplanır.</div>';
     }
@@ -787,6 +788,11 @@
     if (act === 'modal') { openModal(pid, a.getAttribute('data-m')); return; }
     if (act === 'closem') { closeModal(); return; }
     if (act === 'addm') { var M = MODALS[UI.modal.m]; patch(pid, function (p) { p[M.list].push(M.add(p)); }); renderModal(); var rows = modalEl().querySelectorAll('tbody tr'); var last = rows[rows.length - 1]; var f = last && last.querySelector('input:not([type=checkbox])'); if (f) f.focus(); return; }
+    if (act === 'sortm' || act === 'sortall') {
+      var keys = act === 'sortall' ? [['phases', 'start'], ['wps', 'start'], ['milestones', 'date']] : [[MODALS[UI.modal.m].list, MODALS[UI.modal.m].sortKey]];
+      patch(pid, function (p) { keys.forEach(function (k) { p[k[0]] = p[k[0]].map(function (x, i) { return [x, i]; }).sort(function (a, b) { var va = a[0][k[1]] || '9999', vb = b[0][k[1]] || '9999'; if (va !== vb) return va < vb ? -1 : 1; var ea = a[0].end || '', eb = b[0].end || ''; if (ea !== eb) return ea < eb ? -1 : 1; return a[1] - b[1]; }).map(function (x) { return x[0]; }); }); }, { render: true });
+      if (UI.modal) renderModal(); toast('Başlangıç tarihine göre sıralandı'); return;
+    }
     if (act === 'wpsStd') { if (canEdit(pid)) addStdWps(pid); return; }
     if (act === 'phasesStd') {
       var p0 = plan(pid), r = range(p0), s0 = mIdx(r[0]), len = Math.max(5, mIdx(r[1]) - s0), stp = len / 5;
@@ -906,6 +912,73 @@
   }, true);
   document.addEventListener('dragend', function () { if (sdrag) { sdrag = null; sover = null; } clearMarks(); }, true);
 
+  /* ---------- faz / iş paketi / liste satırlarını sürükleyerek sırala ---------- */
+  var rdrag = null, rover = null;
+  function rClear() { document.querySelectorAll('.g-lab[data-gk],tr[data-mrow]').forEach(function (x) { x.style.boxShadow = ''; x.style.opacity = ''; }); }
+  function groupOf(p, w) {
+    if (w.phase && p.phases.some(function (x) { return x.id === w.phase; })) return w.phase;
+    var ph = p.phases.find(function (x) { return w.start && x.start && x.end && w.start >= x.start && w.start < x.end; });
+    return ph ? ph.id : '';
+  }
+  function move(list, from, to, before) {
+    var i = list.findIndex(function (x) { return x.id === from; }); if (i < 0) return null;
+    var it = list.splice(i, 1)[0];
+    var j = to == null ? -1 : list.findIndex(function (x) { return x.id === to; });
+    if (j < 0) list.push(it); else list.splice(before ? j : j + 1, 0, it);
+    return it;
+  }
+  document.addEventListener('dragstart', function (e) {
+    var t = e.target; if (!t.closest) return;
+    var g = t.closest('.kb-plan-host .g-lab[data-gk][draggable="true"]');
+    var m = t.closest('.pl-modal td.pl-grip');
+    if (!g && !m) return;
+    e.stopPropagation();
+    if (g) rdrag = { kind: g.getAttribute('data-gk'), id: g.getAttribute('data-gid'), pid: pidOf(g), el: g };
+    else { var tr = m.closest('tr'); rdrag = { kind: 'mrow', i: +tr.getAttribute('data-mrow'), pid: UI.modal && UI.modal.pid, el: tr }; try { e.dataTransfer.setDragImage(tr, 20, 20); } catch (x) {} }
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'row'); } catch (x) {}
+    setTimeout(function () { if (rdrag) rdrag.el.style.opacity = '.4'; }, 0);
+  }, true);
+  document.addEventListener('dragover', function (e) {
+    if (!rdrag) return;
+    e.stopPropagation(); e.preventDefault();
+    var t = e.target.closest ? e.target : e.target.parentElement, tgt = null; rover = null;
+    if (rdrag.kind === 'mrow') tgt = t.closest('.pl-modal tr[data-mrow]');
+    else {
+      tgt = t.closest('.kb-plan-host .g-lab[data-gk]');
+      if (!tgt) { var tl = t.closest('.kb-plan-host .g-tl'); if (tl && tl.previousElementSibling && tl.previousElementSibling.matches('.g-lab[data-gk]')) tgt = tl.previousElementSibling; }
+    }
+    document.querySelectorAll('.g-lab[data-gk],tr[data-mrow]').forEach(function (x) { if (x !== tgt) x.style.boxShadow = ''; });
+    if (!tgt || tgt === rdrag.el) return;
+    var r = tgt.getBoundingClientRect(), before = e.clientY < r.top + r.height / 2, gk = tgt.getAttribute('data-gk');
+    if (rdrag.kind === 'phase' && gk !== 'phase') { tgt.style.boxShadow = ''; return; }
+    if (rdrag.kind === 'wp' && gk !== 'wp') before = false;   // faz başlığına bırak: o fazın ilk paketi olur
+    tgt.style.boxShadow = before ? 'inset 0 2px 0 #B9052D' : 'inset 0 -2px 0 #B9052D';
+    rover = { el: tgt, before: before, gk: gk, id: tgt.getAttribute('data-gid'), grp: tgt.getAttribute('data-grp'), i: +tgt.getAttribute('data-mrow') };
+    try { e.dataTransfer.dropEffect = 'move'; } catch (x) {}
+  }, true);
+  document.addEventListener('drop', function (e) {
+    if (!rdrag) return;
+    e.stopPropagation(); e.preventDefault();
+    var d = rdrag, o = rover; rdrag = null; rover = null; rClear();
+    if (!o || !d.pid || !canEdit(d.pid)) return;
+    if (d.kind === 'mrow') {
+      var M = MODALS[UI.modal.m]; if (!M || !M.list) return;
+      patch(d.pid, function (p) { var L = p[M.list], it = L.splice(d.i, 1)[0]; var j = o.i > d.i ? o.i - 1 : o.i; L.splice(o.before ? j : j + 1, 0, it); }, { render: true });
+      renderModal(); return;
+    }
+    if (d.kind === 'phase') { patch(d.pid, function (p) { move(p.phases, d.id, o.id, o.before); }, { render: true }); return; }
+    if (d.kind === 'wp') {
+      patch(d.pid, function (p) {
+        var grp = o.grp || '';
+        if (o.gk === 'wp') { var it = move(p.wps, d.id, o.id, o.before); if (it) it.phase = grp; return; }
+        // faz başlığına (ya da "Diğer" başlığına) bırakıldı: o grubun en başına
+        var first = p.wps.find(function (w) { return w.id !== d.id && groupOf(p, w) === grp; });
+        var it2 = move(p.wps, d.id, first ? first.id : null, true); if (it2) it2.phase = grp;
+      }, { render: true });
+    }
+  }, true);
+  document.addEventListener('dragend', function () { if (rdrag) { rdrag = null; rover = null; } rClear(); }, true);
+
   /* ---------- simgeler ve stil ---------- */
   var SV = function (d) { return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; };
   var ICO = {
@@ -976,6 +1049,8 @@
     '.g-ms{position:absolute;top:10px;width:16px;height:16px;transform:translateX(-8px) rotate(45deg);border:2px solid var(--surface-page);box-shadow:0 0 0 1px var(--text-secondary);z-index:1}.g-ms-l{position:absolute;top:9px;font-size:11px;font-weight:600;white-space:nowrap}' +
     '.g-today{position:absolute;top:0;bottom:0;width:2px;background:#B9052D;z-index:1;pointer-events:none}.g-today-l{position:absolute;bottom:3px;transform:translateX(-50%);background:#B9052D;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.04em;z-index:2}' +
     '.pl-sw{width:8px;height:8px;border-radius:2px;flex-shrink:0}' +
+    '.g-lab[draggable="true"]{cursor:grab}.g-grip{color:var(--text-muted);font-size:11px;letter-spacing:-2px;margin-left:-8px;opacity:0;transition:opacity .12s;user-select:none}.g-lab:hover .g-grip{opacity:1}' +
+    '.pl-tbl td.pl-grip{cursor:grab;color:var(--text-muted);font-size:12px;letter-spacing:-2px;text-align:center;user-select:none;padding:0 2px!important}.pl-tbl td.pl-grip:hover{color:var(--text-accent)}' +
     /* v */
     '.pl-vwrap{border:1px solid var(--border-default);border-radius:6px;padding:16px;overflow-x:auto}.pl-vwrap svg{display:block;width:100%;min-width:760px;height:auto;font-family:inherit}' +
     '.vnode{cursor:pointer}.vnode rect.box{fill:var(--surface-page);stroke:var(--border-default);stroke-width:1.5}.vnode:hover rect.box{stroke:var(--text-muted)}.vnode.sel rect.box{stroke:#B9052D;stroke-width:2.5}.vnode text{fill:var(--text-primary)}.vnode .sub{fill:var(--text-muted);font-size:11px}.vnode .pc{fill:var(--text-secondary)}' +
