@@ -926,19 +926,18 @@
   });
   var imgBar = null, imgSel = null;
   var imgH = null, rsz = null;
-  function curPct(im) { var p = +im.getAttribute('data-pct'); if (p) return p; var w = im.getAttribute('data-w'); return w === 's' ? 33 : w === 'm' ? 60 : 100; }
-  function setPct(im, p) { p = Math.max(10, Math.min(100, Math.round(p))); im.setAttribute('data-pct', String(p)); im.removeAttribute('data-w'); im.style.width = p + '%'; }
+  function setPx(im, px) { px = Math.max(40, Math.min(6000, Math.round(px))); im.setAttribute('data-px', String(px)); im.removeAttribute('data-w'); im.removeAttribute('data-pct'); im.style.width = px + 'px'; im.style.maxWidth = 'none'; }
   function hideImgBar() { if (imgBar) imgBar.style.display = 'none'; if (imgH) imgH.style.display = 'none'; if (imgSel) imgSel.classList.remove('pl-imgon'); imgSel = null; }
   function showImgBar(img) {
     hideImgBar(); imgSel = img; img.classList.add('pl-imgon');
     if (!imgBar) {
       imgBar = document.createElement('div'); imgBar.className = 'pl-imgbar'; imgBar.setAttribute('role', 'toolbar'); imgBar.setAttribute('aria-label', 'Görsel');
-      [['33', 'Küçük'], ['60', 'Orta'], ['100', 'Tam genişlik'], ['del', 'Sil']].forEach(function (b) {
+      [['del', 'Görseli sil']].forEach(function (b) {
         var bt = document.createElement('button'); bt.type = 'button'; bt.textContent = b[1]; bt.setAttribute('data-w', b[0]); if (b[0] === 'del') bt.className = 'red';
         bt.addEventListener('mousedown', function (e) { e.preventDefault(); });
         bt.addEventListener('click', function () {
           var im = imgSel; if (!im) return; var ed = im.closest('.kb-rte-ed');
-          if (b[0] === 'del') { im.remove(); hideImgBar(); } else { setPct(im, +b[0]); placeImgBar(); }
+          im.remove(); hideImgBar();
           if (ed) ed.dispatchEvent(new Event('input', { bubbles: true }));
         });
         imgBar.appendChild(bt);
@@ -949,13 +948,13 @@
       imgH = document.createElement('div'); imgH.className = 'pl-imgh'; imgH.title = 'Sürükleyerek boyutlandır'; imgH.setAttribute('aria-hidden', 'true');
       imgH.addEventListener('pointerdown', function (e) {
         if (!imgSel) return; e.preventDefault(); e.stopPropagation();
-        var ed = imgSel.closest('.kb-rte-ed'); rsz = { im: imgSel, ed: ed, left: imgSel.getBoundingClientRect().left, edW: ed.clientWidth || 1 };
+        var ed = imgSel.closest('.kb-rte-ed'), rr = imgSel.getBoundingClientRect(); rsz = { im: imgSel, ed: ed, x0: e.clientX, w0: rr.width };
         try { imgH.setPointerCapture(e.pointerId); } catch (x) {}
         document.body.classList.add('pl-resizing');
       });
       imgH.addEventListener('pointermove', function (e) {
         if (!rsz) return;
-        setPct(rsz.im, (e.clientX - rsz.left) / rsz.edW * 100); placeImgBar();
+        setPx(rsz.im, rsz.w0 + (e.clientX - rsz.x0)); placeImgBar();
       });
       function endR(e) { if (!rsz) return; var ed = rsz.ed; rsz = null; document.body.classList.remove('pl-resizing'); try { imgH.releasePointerCapture(e.pointerId); } catch (x) {} if (ed) ed.dispatchEvent(new Event('input', { bubbles: true })); }
       imgH.addEventListener('pointerup', endR); imgH.addEventListener('pointercancel', endR);
@@ -967,9 +966,7 @@
     if (!imgBar || !imgSel) return;
     var r = imgSel.getBoundingClientRect(), w = imgBar.offsetWidth;
     imgBar.style.top = Math.max(8, r.top + 8) + 'px'; imgBar.style.left = Math.max(8, Math.min(r.left + 8, window.innerWidth - w - 8)) + 'px';
-    var cp = curPct(imgSel);
-    Array.prototype.forEach.call(imgBar.children, function (b) { b.classList.toggle('on', +b.getAttribute('data-w') === cp); });
-    if (imgH) { imgH.style.left = (r.right - 8) + 'px'; imgH.style.top = (r.bottom - 8) + 'px'; imgH.setAttribute('data-pct', '%' + cp); }
+    if (imgH) { imgH.style.left = (r.right - 8) + 'px'; imgH.style.top = (r.bottom - 8) + 'px'; imgH.setAttribute('data-pct', Math.round(r.width) + ' px'); }
   }
   document.addEventListener('click', function (e) {
     if ((imgBar && imgBar.contains(e.target)) || (imgH && imgH.contains(e.target))) return;
