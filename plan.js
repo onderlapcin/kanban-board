@@ -401,8 +401,8 @@
         '<label>Sistem' + sel(B + 'sys', k.sys, [['', '—']].concat(p.systems.map(function (s) { return [s.id, s.name || 'Adsız sistem']; })), D) + '</label>' +
         '<label>Onay durumu' + sel(B + 'status', k.status || 'draft', Object.keys(DSTAT).map(function (x) { return [x, DSTAT[x].l]; }), D) + '</label>' +
         '<label>Revizyon<input data-b="' + B + 'rev" value="' + esc(k.rev || '') + '" placeholder="A"' + D + '></label>' +
-        '<label>Sorumlu' + sel(B + 'owner', k.owner, memberOpts(pid), D) + '</label>' +
-        '<label class="wide">Malzeme<input data-b="' + B + 'material" value="' + esc(k.material || '') + '" placeholder="ör. Al 6063-T6 boru, EPDM hortum"' + D + '></label></div>';
+        '<div class="pl-plab">Sorumlular<div class="pl-owners">' + ownersOf(k).map(function (id) { return '<span class="pl-own">' + avatar(id, 22) + '<span>' + esc(pname(id)) + '</span>' + (E ? '<button type="button" class="pl-x" title="Sorumluyu çıkar" aria-label="' + esc(pname(id)) + ' sorumlulardan çıkar" data-pa="ownrm" data-cid="' + esc(k.id) + '" data-id="' + esc(id) + '">×</button>' : '') + '</span>'; }).join('') +
+          (E ? '<button type="button" class="pl-ownadd" data-pa="ownpick" data-cid="' + esc(k.id) + '">+ Ekle</button>' : (ownersOf(k).length ? '' : '<span class="pl-muted">—</span>')) + '</div></div></div>';
       h += secT('Gereksinimler', E ? '<button type="button" class="pl-btn sm" data-pa="addrow" data-path="' + B + 'reqs" data-n="2">+ Satır</button>' : '');
       h += k.reqs.length ? '<div class="pl-scroll"><table class="pl-tbl ed"><thead><tr><th style="width:150px">Kod</th><th>Gereksinim</th>' + (E ? '<th style="width:36px"></th>' : '') + '</tr></thead><tbody>' + k.reqs.map(function (r, i) { return '<tr><td><input class="mono" data-b="' + B + 'reqs.' + i + '.0" value="' + esc(r[0] || '') + '" placeholder="REQ-01"' + D + '></td><td><input data-b="' + B + 'reqs.' + i + '.1" value="' + esc(r[1] || '') + '" placeholder="ör. Basınç düşümü ≤ 0,30 bar"' + D + '></td>' + (E ? '<td>' + delBtn(B + 'reqs', i) + '</td>' : '') + '</tr>'; }).join('') + '</tbody></table></div>' : '<div class="pl-muted">Gereksinim yok.</div>';
       var rulesHtml = k.rulesHtml != null ? k.rulesHtml : (k.rules.length ? '<ul>' + k.rules.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>' : '');
@@ -450,6 +450,21 @@
         });
       }).catch(function () { toast(nm + ' yüklenemedi'); });
     });
+  }
+  function ownersOf(k) { return Array.isArray(k.owners) ? k.owners : (k.owner ? [k.owner] : []); }
+  function setOwners(pid, cid, fn) {
+    patch(pid, function (p) { var k = p.components.find(function (c) { return c.id === cid; }); if (!k) return; k.owners = fn(ownersOf(k).slice()); delete k.owner; }, { render: true });
+  }
+  function openOwnerPop(anchor, pid, cid) {
+    closePop();
+    var k = plan(pid).components.find(function (c) { return c.id === cid; }); if (!k) return;
+    var cur = ownersOf(k), el = document.createElement('div'); el.id = 'kbpl-pop'; el.className = 'pl-pop'; el.setAttribute('data-pid', pid);
+    el.innerHTML = '<div class="pl-poph">Sorumlu seç</div>' + members(pid).map(function (id) { var on = cur.indexOf(id) >= 0;
+      return '<button type="button" data-pa="owntog" data-cid="' + esc(cid) + '" data-id="' + esc(id) + '" aria-pressed="' + on + '">' + avatar(id, 24) + '<span class="pl-t"><b>' + esc(pname(id)) + '</b></span><span class="pl-chk' + (on ? ' on' : '') + '">' + (on ? '✓' : '') + '</span></button>'; }).join('');
+    document.body.appendChild(el);
+    var r = anchor.getBoundingClientRect();
+    el.style.top = Math.min(r.bottom + 6, window.innerHeight - el.offsetHeight - 8) + 'px';
+    el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - el.offsetWidth - 8)) + 'px';
   }
   function delBtn(path, i) { return '<button type="button" class="pl-x" title="Satırı sil" aria-label="Satırı sil" data-pa="delrow" data-path="' + esc(path) + '" data-i="' + i + '">×</button>'; }
 
@@ -710,7 +725,7 @@
     if (act === 'addcomp') {
       var p1 = plan(pid); if (!p1.systems.length) { openModal(pid, 'systems'); return; }
       var cid = uid(), curSel = p1.components.find(function (k) { return k.id === UI.dg[pid]; });
-      patch(pid, function (p) { p.components.push({ id: cid, sys: (curSel && curSel.sys) || p.systems[0].id, name: '', status: 'draft', rev: 'A', owner: st().me || '', material: '', reqs: [], rules: [], clear: [], std: [], notes: '' }); });
+      patch(pid, function (p) { p.components.push({ id: cid, sys: (curSel && curSel.sys) || p.systems[0].id, name: '', status: 'draft', rev: 'A', owners: st().me ? [st().me] : [], reqs: [], rules: [], clear: [], std: [], notes: '' }); });
       UI.dg[pid] = cid; UI.dgQ = ''; refresh(true);
       setTimeout(function () { var f = document.querySelector('.kb-plan-host .pl-comp .pl-ttl'); if (f) f.focus(); }, 60);
       return;
@@ -718,6 +733,14 @@
     if (act === 'delcomp') {
       if (a.getAttribute('data-sure') !== '1') { a.setAttribute('data-sure', '1'); a.textContent = 'Emin misin? Tekrar tıkla'; return; }
       var did = a.getAttribute('data-id'); patch(pid, function (p) { p.components = p.components.filter(function (k) { return k.id !== did; }); }); UI.dg[pid] = null; refresh(true); toast('Komponent kartı silindi'); return;
+    }
+    if (act === 'ownpick') { if (document.getElementById('kbpl-pop')) { closePop(); return; } openOwnerPop(a, pid, a.getAttribute('data-cid')); return; }
+    if (act === 'ownrm') { var rid2 = a.getAttribute('data-id'); setOwners(pid, a.getAttribute('data-cid'), function (o) { return o.filter(function (x) { return x !== rid2; }); }); return; }
+    if (act === 'owntog') {
+      var oc = a.getAttribute('data-cid'), oid = a.getAttribute('data-id');
+      setOwners(pid, oc, function (o) { var i = o.indexOf(oid); if (i >= 0) o.splice(i, 1); else o.push(oid); return o; });
+      var on = a.getAttribute('aria-pressed') !== 'true'; a.setAttribute('aria-pressed', on); var ck = a.querySelector('.pl-chk'); ck.className = 'pl-chk' + (on ? ' on' : ''); ck.textContent = on ? '✓' : '';
+      return;
     }
     if (act === 'pickfile') { if (t.closest('input')) return; var fi = a.querySelector('.pl-file-in'); if (fi) fi.click(); return; }
     if (act === 'delfile') {
@@ -898,6 +921,11 @@
     '.pl-poph{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);padding:8px 10px 4px}' +
     '.pl-pop button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;border-radius:5px;padding:8px 10px;text-align:left;cursor:pointer}.pl-pop button:hover:not(:disabled){background:var(--surface-subtle)}.pl-pop button:disabled{opacity:.45;cursor:default}.pl-pop button.red b{color:#B9052D}html[data-theme="dark"] .pl-pop button.red b{color:#F2557A}.pl-popsep{height:1px;background:var(--border-default);margin:4px 6px}' +
     '.kb-subnav::-webkit-scrollbar{height:0}[data-kb-sub][draggable="true"]{cursor:grab}' +
+    '.pl-plab{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;letter-spacing:.05em;color:var(--text-muted);text-transform:uppercase;grid-column:1/-1}' +
+    '.pl-owners{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:36px;text-transform:none;letter-spacing:0}' +
+    '.pl-own{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 4px;border:1px solid var(--border-default);border-radius:999px;font-size:13px;font-weight:500;color:var(--text-primary)}.pl-own>span:not(.pl-av){padding-right:2px}.pl-own .pl-x{width:22px;height:22px;font-size:15px;border-radius:50%}' +
+    '.pl-ownadd{border:1px dashed var(--border-default);background:transparent;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--text-muted);cursor:pointer}.pl-ownadd:hover{border-color:#B9052D;color:var(--text-accent)}' +
+    '.pl-chk{width:18px;height:18px;border:1.5px solid var(--border-strong);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}.pl-chk.on{background:#B9052D;border-color:#B9052D}' +
     '.pl-drop{border:1.5px dashed var(--border-default);border-radius:6px;padding:14px;text-align:center;font-size:13px;color:var(--text-muted);cursor:pointer}.pl-drop:hover,.pl-drop.over{border-color:#B9052D;background:var(--surface-subtle);color:var(--text-secondary)}' +
     '.pl-files:empty{display:none}.pl-files{display:flex;flex-direction:column;gap:10px}.pl-imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}' +
     '.pl-imgit{position:relative;border:1px solid var(--border-default);border-radius:6px;overflow:hidden;aspect-ratio:4/3;background:var(--surface-subtle)}.pl-imgit img{width:100%;height:100%;object-fit:cover;display:block}.pl-imgit .pl-x{position:absolute;top:4px;right:4px;background:var(--surface-page);box-shadow:0 1px 3px rgba(0,0,0,.2)}' +
