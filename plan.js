@@ -389,11 +389,11 @@
     var T = todayStr(), tx = xd(T), showT = tx >= 0 && tx <= W;
     var today = showT ? '<div class="g-today" style="left:' + P(tx) + '"></div>' : '';
     var DR = canEdit(pid);
-    function row(lab, cls, inner, dk, id, grp) { return '<div class="g-lab ' + cls + '"' + (dk ? ' data-gk="' + dk + '" data-gid="' + esc(id) + '" data-grp="' + esc(grp || '') + '"' + (DR ? ' draggable="true"' : '') : (grp != null ? ' data-gk="grp" data-grp="' + esc(grp) + '"' : '')) + '>' + (dk && DR ? '<span class="g-grip" aria-hidden="true">⋮⋮</span>' : '') + lab + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + (wlines ? '<div class="g-wl">' + wlines + '</div>' : '') + today + inner + '</div>'; }
+    function row(lab, cls, inner, dk, id, grp) { return '<div class="g-lab ' + cls + '"' + (dk ? ' data-gk="' + dk + '" data-gid="' + esc(id) + '" data-grp="' + esc(grp || '') + '"' + (DR ? ' draggable="true" title="Çift tıkla: adı düzenle · Sürükle: sırala"' : '') : (grp != null ? ' data-gk="grp" data-grp="' + esc(grp) + '"' : '')) + '>' + (dk && DR ? '<span class="g-grip" aria-hidden="true">⋮⋮</span>' : '') + lab + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + (wlines ? '<div class="g-wl">' + wlines + '</div>' : '') + today + inner + '</div>'; }
     function bar(w, color) {
       if (!w.start) return '';
       var a = xd(w.start), b = xd(addDays(w.end || w.start, 1));
-      return '<div class="g-bar' + (DR ? ' g-ed' : '') + '" data-bk="wp" data-bid="' + esc(w.id) + '" data-s="' + esc(w.start) + '" data-e="' + esc(w.end || w.start) + '" title="' + esc((w.code ? w.code + ' · ' : '') + (w.name || '') + ' · %' + (+w.pct || 0) + ' · ' + fmtR(w.start, w.end) + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır (haftalık)' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + color + '"><span class="fill" style="width:' + (+w.pct || 0) + '%"></span><span class="tx">' + (b - a > 110 ? esc(pname(w.owner)) : '') + '</span>' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>';
+      return '<div class="g-bar' + (DR ? ' g-ed' : '') + '" data-bk="wp" data-bid="' + esc(w.id) + '" data-s="' + esc(w.start) + '" data-e="' + esc(w.end || w.start) + '" title="' + esc((w.code ? w.code + ' · ' : '') + (w.name || '') + ' · %' + (+w.pct || 0) + ' · ' + fmtR(w.start, w.end) + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır (haftalık) · Çift tıkla: adı düzenle' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + color + '"><span class="fill" style="width:' + (+w.pct || 0) + '%"></span><span class="tx">' + (b - a > 110 ? esc(pname(w.owner)) : '') + '</span>' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>';
     }
     function wpRow(w, color, grp) { return row('<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="g-nm">' + esc(w.name || '') + '</span><small>%' + (+w.pct || 0) + '</small>', 'wp', bar(w, color), 'wp', w.id, grp); }
     var gs = Math.floor(m0 / 12) + '-' + String(m0 % 12 + 1).padStart(2, '0') + '-01', ge = Math.floor(m1 / 12) + '-' + String(m1 % 12 + 1).padStart(2, '0') + '-01';
@@ -404,7 +404,7 @@
     p.phases.forEach(function (ph) {
       var c = ph.color || '#797979';
       var a = ph.start ? xd(ph.start) : 0, b = ph.end ? xd(addDays(ph.end, 1)) : a;
-      h += row('<span class="pl-sw" style="background:' + c + '"></span>' + esc(ph.name || '') + '<small>' + (ph.start ? fmtR(ph.start, ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase' + (DR ? ' g-ed' : '') + '" data-bk="phase" data-bid="' + esc(ph.id) + '" data-s="' + esc(ph.start) + '" data-e="' + esc(ph.end || ph.start) + '" title="' + esc((ph.name || '') + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + c + '">' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>' : '', 'phase', ph.id, ph.id);
+      h += row('<span class="pl-sw" style="background:' + c + '"></span><span class="g-nm">' + esc(ph.name || '') + '</span><small>' + (ph.start ? fmtR(ph.start, ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase' + (DR ? ' g-ed' : '') + '" data-bk="phase" data-bid="' + esc(ph.id) + '" data-s="' + esc(ph.start) + '" data-e="' + esc(ph.end || ph.start) + '" title="' + esc((ph.name || '') + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır (haftalık) · Çift tıkla: adı düzenle' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + c + '">' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>' : '', 'phase', ph.id, ph.id);
       p.wps.forEach(function (w) {
         if (used[w.id]) return;
         var manual = w.phase && p.phases.some(function (x) { return x.id === w.phase; });
@@ -1083,7 +1083,8 @@
     var d = bdrag; bdrag = null;
     try { d.bar.releasePointerCapture(e.pointerId); } catch (x) {}
     d.bar.classList.remove('g-drag'); document.body.classList.remove('pl-moving', 'pl-sizing'); if (btip) btip.style.display = 'none';
-    if (!d.r || (d.r[0] === d.s && d.r[1] === d.e)) { refresh(true); return; }
+    if (!d.r) return;   // sadece tıklandı (çift tık için DOM'u yenileme)
+    if (d.r[0] === d.s && d.r[1] === d.e) { refresh(true); return; }
     var s = d.r[0], en = d.r[1];
     patch(d.pid, function (p) { var L = d.kind === 'phase' ? p.phases : p.wps, it = L.find(function (x) { return x.id === d.id; }); if (it) { it.start = s; it.end = en; } }, { render: true });
     if (UI.modal) renderModal();
@@ -1186,6 +1187,30 @@
       var def = pg.type === 'note' ? '' : PAGE[pg.type].label;
       if (v === pageLabel(pg)) return;
       renamePage(pid, id, v === def ? '' : v);
+    }
+    inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); finish(true); } else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(false); } });
+    inp.addEventListener('blur', function () { finish(true); });
+  }, true);
+
+  /* ---------- Gantt: faz / iş paketi adına (ya da çubuğuna) çift tıkla, adı düzenle ---------- */
+  document.addEventListener('dblclick', function (e) {
+    var t = e.target.closest && e.target.closest('.kb-plan-host .g-lab[data-gk="wp"], .kb-plan-host .g-lab[data-gk="phase"], .kb-plan-host .g-bar[data-bk]'); if (!t) return;
+    var pid = pidOf(t); if (!pid || !canEdit(pid)) return;
+    var kind = t.getAttribute('data-gk') || t.getAttribute('data-bk'), id = t.getAttribute('data-gid') || t.getAttribute('data-bid');
+    var lab = t.classList.contains('g-lab') ? t : t.closest('.g-tl').previousElementSibling;
+    var nm = lab && lab.querySelector('.g-nm'); if (!nm) return;
+    e.preventDefault(); e.stopPropagation();
+    var L = kind === 'phase' ? plan(pid).phases : plan(pid).wps, it = L.find(function (x) { return x.id === id; }); if (!it) return;
+    var old = document.getElementById('kbpl-ren'); if (old) old.remove();
+    var r = nm.getBoundingClientRect(), lr = lab.getBoundingClientRect(), inp = document.createElement('input');
+    inp.id = 'kbpl-ren'; inp.className = 'pl-ren'; inp.value = it.name || ''; inp.placeholder = kind === 'phase' ? 'Faz adı' : 'İş paketi adı'; inp.setAttribute('aria-label', inp.placeholder);
+    inp.style.top = (lr.top + 4) + 'px'; inp.style.left = (r.left - 4) + 'px'; inp.style.width = Math.max(220, lr.right - r.left - 8) + 'px'; inp.style.height = (lr.height - 8) + 'px';
+    document.body.appendChild(inp); inp.focus(); inp.select();
+    var done = false;
+    function finish(save) {
+      if (done) return; done = true; var v = inp.value.trim(); inp.remove();
+      if (!save || v === (it.name || '')) return;
+      patch(pid, function (p) { var LL = kind === 'phase' ? p.phases : p.wps, x = LL.find(function (y) { return y.id === id; }); if (x) x.name = v; }, { render: true });
     }
     inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); finish(true); } else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(false); } });
     inp.addEventListener('blur', function () { finish(true); });
