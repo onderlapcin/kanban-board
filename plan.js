@@ -83,11 +83,55 @@
   /* ---------- kayıt ---------- */
   function patch(pid, fn, opt) {
     opt = opt || {};
-    var cur = clone(plan(pid)); fn(cur); cur.projectId = pid; local[pid] = cur;
+    var before = plan(pid), cur = clone(before); fn(cur); cur.projectId = pid; stamp(before, cur); local[pid] = cur;
     clearTimeout(writeT[pid]);
     writeT[pid] = setTimeout(function () { flush(pid); }, opt.now ? 0 : 600);
     if (opt.nav) rerenderApp();
     if (opt.render) refresh(true);
+  }
+  /* ---------- görmediğin değişiklikler ---------- */
+  var COLLS = ['systems', 'wps', 'phases', 'milestones', 'components', 'pages'];
+  function bare(o) { var c = {}; Object.keys(o || {}).forEach(function (k) { if (k !== 'u' && k !== 'ub') c[k] = o[k]; }); return JSON.stringify(c); }
+  function stamp(a, b) {
+    var me = st().me, now = Date.now(); if (!me) return;
+    COLLS.forEach(function (c) {
+      var old = {}; (a[c] || []).forEach(function (x) { old[x.id] = x; });
+      (b[c] || []).forEach(function (x) { var o = old[x.id]; if (!o || bare(o) !== bare(x)) { x.u = now; x.ub = me; } });
+    });
+    if (JSON.stringify(a.info || {}) !== JSON.stringify(b.info || {}) || JSON.stringify(a.roles || {}) !== JSON.stringify(b.roles || {})) { b.infoU = now; b.infoUb = me; }
+    if (JSON.stringify(a.vcycle || {}) !== JSON.stringify(b.vcycle || {})) { b.vcU = now; b.vcUb = me; }
+  }
+  var seen = null, seenBase = 0;
+  function loadSeen() {
+    var me = st().me; if (!me) return {};
+    if (seen && seen.__me === me) return seen;
+    try { seen = JSON.parse(localStorage.getItem('kb-pseen-' + me) || '{}') || {}; } catch (e) { seen = {}; }
+    try { seenBase = +localStorage.getItem('kb-pseen0-' + me) || 0; if (!seenBase) { seenBase = Date.now(); localStorage.setItem('kb-pseen0-' + me, String(seenBase)); } } catch (e) { seenBase = Date.now(); }
+    try { var g = +localStorage.getItem('kb-seen-' + me) || 0; if (g > seenBase) seenBase = g; } catch (e) {}
+    seen.__me = me; return seen;
+  }
+  function seenAt(pid, page) { var m = loadSeen(); return Math.max(seenBase, m[pid + '|' + page] || 0); }
+  function setSeen(pid, page, ts) {
+    var m = loadSeen(), k = pid + '|' + page; if ((m[k] || 0) >= ts) return false;
+    m[k] = ts; try { var c = {}; Object.keys(m).forEach(function (x) { if (x !== '__me') c[x] = m[x]; }); localStorage.setItem('kb-pseen-' + st().me, JSON.stringify(c)); } catch (e) {}
+    return true;
+  }
+  function chgFor(pid, pg) {
+    var p = plan(pid), me = st().me; if (!me) return 0;
+    if (pg.type === 'board') { var a = app(); if (!a || !a.hlOf) return 0; return tasksOf(pid).reduce(function (n, t) { try { return n + (a.hlOf(t) ? 1 : 0); } catch (e) { return n; } }, 0); }
+    var since = seenAt(pid, pg.id), n = 0;
+    function cnt(list) { (list || []).forEach(function (x) { if (x.ub && x.ub !== me && x.u > since) n++; }); }
+    if (pg.type === 'overview') { cnt(p.systems); cnt(p.wps); if (p.infoUb && p.infoUb !== me && p.infoU > since) n++; }
+    else if (pg.type === 'timeline') { cnt(p.phases); cnt(p.milestones); cnt(p.wps); if (p.vcUb && p.vcUb !== me && p.vcU > since) n++; }
+    else if (pg.type === 'guide') cnt(p.components);
+    else if (pg.type === 'note') cnt([pg]);
+    return n;
+  }
+  function chgTotal(pid) { return pagesOf(pid).reduce(function (n, pg) { return n + (pg.type === 'board' ? 0 : chgFor(pid, pg)); }, 0); }
+  function markSeen(pids) {
+    var now = Date.now();
+    (pids || (st().projects || []).map(function (p) { return p.id; })).forEach(function (pid) { pagesOf(pid).forEach(function (pg) { setSeen(pid, pg.id, now); }); });
+    rerenderApp(); refresh(true);
   }
   function flush(pid) {
     var data = local[pid]; if (!data || !dbObj) return;
@@ -132,8 +176,8 @@
   function navFor(pid) {
     var cur = getSub(pid);
     return pagesOf(pid).map(function (pg) {
-      var on = pg.id === cur;
-      return { id: pg.id, pid: pid, drag: pg.id !== 'overview' && canEdit(pid) ? 'true' : 'false', label: pageLabel(pg), icon: PAGE[pg.type].icon, bg: on ? 'var(--surface-page)' : 'transparent',
+      var on = pg.id === cur, n = on && pg.type !== 'board' ? 0 : chgFor(pid, pg);
+      return { chg: n, hasChg: n > 0, chgTitle: n + ' görmediğin değişiklik', id: pg.id, pid: pid, drag: pg.id !== 'overview' && canEdit(pid) ? 'true' : 'false', label: pageLabel(pg), icon: PAGE[pg.type].icon, bg: on ? 'var(--surface-page)' : 'transparent',
         border: on ? 'var(--border-default)' : 'transparent', color: on ? 'var(--text-accent)' : 'var(--text-secondary)', weight: on ? 600 : 400,
         onClick: function () { setSub(pid, pg.id); } };
     });
@@ -390,7 +434,7 @@
     var groups = p.systems.map(function (sy) { return { sys: sy.id, name: sy.name || 'Adsız sistem', ks: comps.filter(function (k) { return k.sys === sy.id; }) }; });
     var orphan = comps.filter(function (k) { return !p.systems.some(function (sy) { return sy.id === k.sys; }); });
     if (orphan.length) groups.push({ name: 'Sistem atanmamış', ks: orphan });
-    groups.forEach(function (g) { h += '<div class="pl-dgs">' + esc(g.name) + '</div>' + (!g.ks.length ? (E && g.sys ? '<button type="button" class="pl-dgadd" data-pa="addcomp" data-sys="' + esc(g.sys) + '">+ Kart ekle</button>' : '<div class="pl-dgnone">Henüz kart yok</div>') : '') + g.ks.map(function (k) { return '<button type="button" class="' + (k.id === selId ? 'on' : '') + '" data-pa="dg" data-id="' + esc(k.id) + '"><span>' + esc(k.name || 'Adsız komponent') + '</span>' + pill(DSTAT[k.status || 'draft']) + '</button>'; }).join(''); });
+    groups.forEach(function (g) { h += '<div class="pl-dgg"><div class="pl-dgs">' + esc(g.name) + '</div>' + (!g.ks.length ? (E && g.sys ? '<button type="button" class="pl-dgadd" data-pa="addcomp" data-sys="' + esc(g.sys) + '">+ Kart ekle</button>' : '<div class="pl-dgnone">Henüz kart yok</div>') : '') + g.ks.map(function (k) { return '<button type="button" class="' + (k.id === selId ? 'on' : '') + '" data-pa="dg" data-id="' + esc(k.id) + '"><span>' + esc(k.name || 'Adsız komponent') + '</span>' + pill(DSTAT[k.status || 'draft']) + (k.ub && k.ub !== st().me && k.u > seenAt(pid, 'guide', true) ? '<span class="pl-new" title="Görmediğin değişiklik"></span>' : '') + '</button>'; }).join('') + '</div>'; });
     h += '</div>';
     var ki = p.components.findIndex(function (k) { return k.id === selId; }), k = p.components[ki];
     if (k) {
@@ -525,7 +569,10 @@
     if (!force && host.__sig === sig && host.querySelector('.pl-in')) return;
     if (editingIn(host) && !force) { host.__dirty = true; return; }
     var gw = host.querySelector('.g-wrap'), gl = gw ? gw.scrollLeft : null, sameView = host.__view === pid + '|' + sub;
+    var wasSeen = seenAt(pid, sub);
     host.innerHTML = htmlFor(pid, sub);
+    host.__seenT && clearTimeout(host.__seenT);
+    host.__seenT = setTimeout(function () { if (host.isConnected && host.getAttribute('data-sub') === sub && setSeen(pid, sub, Date.now())) rerenderApp(); }, 1500);
     host.__sig = sig; host.__dirty = false;
     if (!sameView) { host.scrollTop = 0; host.__view = pid + '|' + sub; }
     var ng = host.querySelector('.g-wrap');
@@ -903,7 +950,7 @@
     '.pl-num{width:72px;padding:4px 8px;border:1px solid var(--border-default);border-radius:4px;background:var(--surface-page)}' +
     /* guide */
     '.pl-dg{display:grid;grid-template-columns:290px minmax(0,1fr);gap:20px;align-items:start}' +
-    '.pl-dgl{border:1px solid var(--border-default);border-radius:6px;overflow:hidden;position:sticky;top:0}.pl-dgs{padding:10px 14px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);background:var(--surface-subtle);border-bottom:1px solid var(--border-default)}' +
+    '.pl-dgl{display:flex;flex-direction:column;gap:12px;position:sticky;top:0}.pl-dgg{border:1px solid var(--border-default);border-radius:6px;overflow:hidden}.pl-dgg>:last-child{border-bottom:0!important}.pl-new{width:8px;height:8px;border-radius:50%;background:#B9052D;flex-shrink:0}.pl-dgs{padding:10px 14px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);background:var(--surface-subtle);border-bottom:1px solid var(--border-default)}' +
     '.pl-dgl button{display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid var(--surface-subtle);background:var(--surface-page);text-align:left;padding:10px 14px;cursor:pointer;font-size:13px}.pl-dgl button>span:first-child{flex:1;min-width:0}.pl-dgl button:hover{background:var(--surface-subtle)}.pl-dgl button.on{background:rgba(185,5,45,.08);color:var(--text-accent);font-weight:600}' +
     '.pl-dgl button.pl-dgadd{color:var(--text-muted);font-size:12px;font-weight:600}.pl-dgl button.pl-dgadd:hover{color:var(--text-accent)}.pl-dgnone{padding:10px 14px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--surface-subtle)}' +
     '.pl-comp{gap:16px}.pl-ttl{font-size:22px;font-weight:600;border:1px solid transparent;border-radius:5px;padding:4px 6px;margin-left:-7px;outline:none;background:transparent;width:100%}.pl-ttl:hover{border-color:var(--border-default)}.pl-ttl:focus{border-color:#B9052D}.pl-ttl.big{font-size:30px;margin-left:-7px}' +
@@ -943,6 +990,7 @@
     tick: function () { start(); refresh(); },
     getSub: getSub, setSub: setSub, navFor: navFor,
     hasBoard: function (pid) { return hasPage(pid, 'board'); },
+    chgTotal: chgTotal, markSeen: markSeen,
     sysOpts: sysOpts, wpOpts: wpOpts, chipsFor: chipsFor,
     _plan: plan
   };
