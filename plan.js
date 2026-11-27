@@ -304,30 +304,31 @@
     var mw = UI.zoom === 'month' ? 56 : 22, W = nm * mw;
     function x(ym, f) { return ((mIdx(ym) - m0) + (f || 0)) * mw; }
     function xd(d) { return x(d.slice(0, 7), dayFrac(d)); }
+    function P(v) { return (Math.max(0, Math.min(W, v)) / W * 100).toFixed(4) + '%'; }
     var months = '', grid = '';
     for (var i = 0; i < nm; i++) {
       var mi = m0 + i, y = Math.floor(mi / 12), mo = mi % 12;
-      if (UI.zoom === 'month') months += '<div style="width:' + mw + 'px">' + (mo === 0 || i === 0 ? '<b>' + y + '</b>' : '&nbsp;') + '<span>' + MON[mo] + '</span></div>';
-      else if (mo % 3 === 0 || i === 0) { var span = Math.min(3 - (mo % 3), nm - i); months += '<div style="width:' + (span * mw) + 'px">' + (mo < 3 || i === 0 ? '<b>' + y + '</b>' : '&nbsp;') + '<span>Ç' + (Math.floor(mo / 3) + 1) + '</span></div>'; }
-      grid += '<div style="width:' + mw + 'px;' + (UI.zoom === 'quarter' && mo % 3 !== 0 ? 'border-left-color:transparent' : '') + '"></div>';
+      if (UI.zoom === 'month') months += '<div style="width:' + P(mw) + '">' + (mo === 0 || i === 0 ? '<b>' + y + '</b>' : '&nbsp;') + '<span>' + MON[mo] + '</span></div>';
+      else if (mo % 3 === 0 || i === 0) { var span = Math.min(3 - (mo % 3), nm - i); months += '<div style="width:' + P(span * mw) + '">' + (mo < 3 || i === 0 ? '<b>' + y + '</b>' : '&nbsp;') + '<span>Ç' + (Math.floor(mo / 3) + 1) + '</span></div>'; }
+      grid += '<div style="width:' + P(mw) + ';' + (UI.zoom === 'quarter' && mo % 3 !== 0 ? 'border-left-color:transparent' : '') + '"></div>';
     }
     var T = todayStr(), tx = xd(T), showT = tx >= 0 && tx <= W;
-    var today = showT ? '<div class="g-today" style="left:' + tx + 'px"></div>' : '';
+    var today = showT ? '<div class="g-today" style="left:' + P(tx) + '"></div>' : '';
     function row(lab, cls, inner) { return '<div class="g-lab ' + cls + '">' + lab + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + today + inner + '</div>'; }
     function bar(w, color) {
       if (!w.start) return '';
       var a = x(w.start), b = x(w.end || w.start, 1);
-      return '<div class="g-bar" title="' + esc((w.code ? w.code + ' · ' : '') + (w.name || '') + ' · %' + (+w.pct || 0)) + '" style="left:' + a + 'px;width:' + Math.max(6, b - a) + 'px;background:' + color + '"><span class="fill" style="width:' + (+w.pct || 0) + '%"></span><span class="tx">' + (b - a > 90 ? esc(pname(w.owner)) : '') + '</span></div>';
+      return '<div class="g-bar" title="' + esc((w.code ? w.code + ' · ' : '') + (w.name || '') + ' · %' + (+w.pct || 0)) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + color + '"><span class="fill" style="width:' + (+w.pct || 0) + '%"></span><span class="tx">' + (b - a > 110 ? esc(pname(w.owner)) : '') + '</span></div>';
     }
     function wpRow(w, color) { return row('<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="g-nm">' + esc(w.name || '') + '</span><small>%' + (+w.pct || 0) + '</small>', 'wp', bar(w, color)); }
-    var h = '<div class="gantt"><div class="g-wrap"><div class="g-tbl" style="grid-template-columns:auto ' + W + 'px">';
-    h += '<div class="g-lab g-head">Faz / iş paketi</div><div class="g-tl g-head"><div class="g-months">' + months + '</div>' + (showT ? '<div class="g-today-l" style="left:' + tx + 'px">BUGÜN</div>' : '') + '</div>';
-    if (p.milestones.length) h += row('Kilometre taşları', 'ph', p.milestones.filter(function (m) { return m.date; }).map(function (m) { var xx = xd(m.date); return '<span class="g-ms" title="' + esc((m.code ? m.code + ' · ' : '') + (m.name || '') + ' · ' + fmtD(m.date)) + '" style="left:' + xx + 'px;background:' + (m.done ? '#2E8B57' : 'var(--surface-page)') + '"></span><span class="g-ms-l" style="left:' + (xx + 12) + 'px">' + esc(m.code || m.name || '') + '</span>'; }).join(''));
+    var h = '<div class="gantt"><div class="g-wrap"><div class="g-tbl" style="grid-template-columns:max-content minmax(' + W + 'px,1fr)">';
+    h += '<div class="g-lab g-head">Faz / iş paketi</div><div class="g-tl g-head"><div class="g-months">' + months + '</div>' + (showT ? '<div class="g-today-l" style="left:' + P(tx) + '">BUGÜN</div>' : '') + '</div>';
+    if (p.milestones.length) h += row('Kilometre taşları', 'ph', p.milestones.filter(function (m) { return m.date; }).map(function (m) { var xx = xd(m.date); return '<span class="g-ms" title="' + esc((m.code ? m.code + ' · ' : '') + (m.name || '') + ' · ' + fmtD(m.date)) + '" style="left:' + P(xx) + ';background:' + (m.done ? '#2E8B57' : 'var(--surface-page)') + '"></span><span class="g-ms-l" style="left:calc(' + P(xx) + ' + 12px)">' + esc(m.code || m.name || '') + '</span>'; }).join(''));
     var used = {};
     p.phases.forEach(function (ph) {
       var c = ph.color || '#797979';
       var a = ph.start ? x(ph.start) : 0, b = ph.end ? x(ph.end) : a;
-      h += row('<span class="pl-sw" style="background:' + c + '"></span>' + esc(ph.name || '') + '<small>' + (ph.start ? fmtM(ph.start) + ' – ' + fmtM(ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase" style="left:' + a + 'px;width:' + Math.max(4, b - a) + 'px;background:' + c + '"></div>' : '');
+      h += row('<span class="pl-sw" style="background:' + c + '"></span>' + esc(ph.name || '') + '<small>' + (ph.start ? fmtM(ph.start) + ' – ' + fmtM(ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + c + '"></div>' : '');
       p.wps.forEach(function (w) { if (used[w.id] || !w.start || !ph.start || !ph.end) return; if (w.start >= ph.start && w.start < ph.end) { used[w.id] = 1; h += wpRow(w, c); } });
     });
     var rest = p.wps.filter(function (w) { return !used[w.id]; });
@@ -513,7 +514,7 @@
     host.__sig = sig; host.__dirty = false;
     if (!sameView) { host.scrollTop = 0; host.__view = pid + '|' + sub; }
     var ng = host.querySelector('.g-wrap');
-    if (ng) { if (sameView && gl != null) ng.scrollLeft = gl; else { var gt = host.querySelector('.g-today'); if (gt) ng.scrollLeft = Math.max(0, parseFloat(gt.style.left) - 260); } }
+    if (ng) { if (sameView && gl != null) ng.scrollLeft = gl; else { var gt = host.querySelector('.g-today'), lab = host.querySelector('.g-lab'); if (gt) ng.scrollLeft = Math.max(0, gt.offsetLeft + (lab ? lab.offsetWidth : 0) - ng.clientWidth / 2); } }
   }
   var refT = null;
   function refresh(force) {
@@ -868,7 +869,7 @@
     '.g-head{position:sticky;top:0;z-index:3;background:var(--surface-muted)!important;min-height:46px;font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--text-secondary);text-transform:uppercase}.g-lab.g-head{z-index:4}' +
     '.g-months{display:flex;height:100%}.g-months div{border-left:1px solid var(--border-default);display:flex;flex-direction:column;justify-content:center;padding-left:6px;font-size:11px;white-space:nowrap;box-sizing:border-box}' +
     '.g-grid{position:absolute;inset:0;display:flex;pointer-events:none}.g-grid div{border-left:1px solid var(--surface-subtle);box-sizing:border-box}' +
-    '.g-bar{position:absolute;top:9px;height:20px;border-radius:4px;display:flex;align-items:center;overflow:hidden;font-size:11px;font-weight:600;color:#fff;white-space:nowrap}.g-bar .fill{position:absolute;inset:0 auto 0 0;background:rgba(0,0,0,.22)}.g-bar .tx{position:relative;padding:0 8px}.g-bar.phase{top:12px;height:14px;border-radius:3px;opacity:.9}' +
+    '.g-bar{min-width:6px;box-sizing:border-box;position:absolute;top:9px;height:20px;border-radius:4px;display:flex;align-items:center;overflow:hidden;font-size:11px;font-weight:600;color:#fff;white-space:nowrap}.g-bar .fill{position:absolute;inset:0 auto 0 0;background:rgba(0,0,0,.22)}.g-bar .tx{position:relative;padding:0 8px}.g-bar.phase{top:12px;height:14px;border-radius:3px;opacity:.9}' +
     '.g-ms{position:absolute;top:10px;width:16px;height:16px;transform:translateX(-8px) rotate(45deg);border:2px solid var(--surface-page);box-shadow:0 0 0 1px var(--text-secondary);z-index:1}.g-ms-l{position:absolute;top:9px;font-size:11px;font-weight:600;white-space:nowrap}' +
     '.g-today{position:absolute;top:0;bottom:0;width:2px;background:#B9052D;z-index:1;pointer-events:none}.g-today-l{position:absolute;bottom:3px;transform:translateX(-50%);background:#B9052D;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.04em;z-index:2}' +
     '.pl-sw{width:8px;height:8px;border-radius:2px;flex-shrink:0}' +
