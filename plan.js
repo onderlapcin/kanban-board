@@ -373,7 +373,12 @@
       var c = ph.color || '#797979';
       var a = ph.start ? x(ph.start) : 0, b = ph.end ? x(ph.end) : a;
       h += row('<span class="pl-sw" style="background:' + c + '"></span>' + esc(ph.name || '') + '<small>' + (ph.start ? fmtM(ph.start) + ' – ' + fmtM(ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + c + '"></div>' : '');
-      p.wps.forEach(function (w) { if (used[w.id] || !w.start || !ph.start || !ph.end) return; if (w.start >= ph.start && w.start < ph.end) { used[w.id] = 1; h += wpRow(w, c); } });
+      p.wps.forEach(function (w) {
+        if (used[w.id]) return;
+        var manual = w.phase && p.phases.some(function (x) { return x.id === w.phase; });
+        var hit = manual ? w.phase === ph.id : (w.start && ph.start && ph.end && w.start >= ph.start && w.start < ph.end);
+        if (hit) { used[w.id] = 1; h += wpRow(w, c); }
+      });
     });
     var rest = p.wps.filter(function (w) { return !used[w.id]; });
     if (rest.length) { if (p.phases.length) h += row('Diğer iş paketleri', 'ph', ''); rest.forEach(function (w) { h += wpRow(w, '#0087A0'); }); }
@@ -599,7 +604,7 @@
     systems: { title: 'Sistemler', list: 'systems', add: function () { return { id: uid(), name: '', owner: '' }; },
       cols: [['name', 'Sistem adı', 'text', 'ör. Batarya termal yönetimi'], ['owner', 'Sorumlu', 'member']] },
     wps: { title: 'İş paketleri', list: 'wps', add: function (p) { return { id: uid(), code: 'WP' + (p.wps.length + 1), name: '', owner: '', start: '', end: '', pct: 0, v: '' }; },
-      cols: [['code', 'Kod', 'text', 'WP1', 70], ['name', 'İş paketi', 'text', 'ör. 3B paketleme ve yerleşim'], ['owner', 'Sorumlu', 'member'], ['start', 'Başlangıç', 'month'], ['end', 'Bitiş', 'month'], ['pct', '%', 'num', '', 64], ['v', 'V-döngüsü adımı', 'vstep']] },
+      cols: [['code', 'Kod', 'text', 'WP1', 70], ['name', 'İş paketi', 'text', 'ör. 3B paketleme ve yerleşim'], ['owner', 'Sorumlu', 'member'], ['start', 'Başlangıç', 'month'], ['end', 'Bitiş', 'month'], ['pct', '%', 'num', '', 64], ['phase', 'Faz', 'phase'], ['v', 'V-döngüsü adımı', 'vstep']] },
     phases: { title: 'Proje fazları', list: 'phases', add: function () { return { id: uid(), name: '', start: '', end: '', color: '#0087A0' }; },
       cols: [['name', 'Faz', 'text', 'ör. Detay tasarım'], ['start', 'Başlangıç', 'month'], ['end', 'Bitiş', 'month'], ['color', 'Renk', 'color']] },
     milestones: { title: 'Kilometre taşları / gate\'ler', list: 'milestones', add: function () { return { id: uid(), code: '', name: '', date: '', done: false }; },
@@ -631,6 +636,7 @@
           return '<tr>' + M.cols.map(function (c) {
             var b = M.list + '.' + i + '.' + c[0], v = row[c[0]];
             if (c[2] === 'member') return '<td>' + sel(b, v, memberOpts(pid)) + '</td>';
+            if (c[2] === 'phase') return '<td>' + sel(b, v, [['', 'Otomatik (başlangıca göre)']].concat(p.phases.map(function (x) { return [x.id, x.name || 'Adsız faz']; }))) + '</td>';
             if (c[2] === 'vstep') return '<td>' + sel(b, v, [['', '—']].concat(VSTEPS.map(function (s) { return [s.id, s.l]; }))) + '</td>';
             if (c[2] === 'color') return '<td>' + sel(b, v, PCOLS.map(function (x) { return [x[0], x[1]]; }), ' style="border-left:6px solid ' + (v || '#797979') + '"') + '</td>';
             if (c[2] === 'chk') return '<td class="ctr"><input type="checkbox" data-b="' + b + '" data-t="chk"' + (v ? ' checked' : '') + '></td>';
@@ -639,7 +645,7 @@
           }).join('') + '<td>' + delBtn(M.list, i) + '</td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="pl-muted">Henüz kayıt yok.</div>';
       h += '<div class="pl-row g8"><button type="button" class="pl-btn" data-pa="addm">+ Satır ekle</button>' + (M.list === 'phases' && !L.length ? '<button type="button" class="pl-btn" data-pa="phasesStd">Standart otomotiv fazları</button>' : '') + (M.list === 'wps' ? '<button type="button" class="pl-btn" data-pa="wpsStd" title="' + esc(STD_WPS.map(function (x) { return x[0]; }).join(' · ')) + '">Hazır iş paketlerini ekle</button>' : '') + '</div>';
-      if (M.list === 'wps') h += '<div class="pl-muted sm">Görevler, görev penceresindeki "İş paketi" alanından bu paketlere bağlanır. V-döngüsü adımı seçilen paketler V-döngüsü görünümünde ilerlemeyi besler.</div>';
+      if (M.list === 'wps') h += '<div class="pl-muted sm">Faz "Otomatik" ise iş paketi, başlangıç ayının düştüğü fazın altında gösterilir; elle seçersen Gantt seçtiğin fazı kullanır. Görevler, görev penceresindeki "İş paketi" alanından bu paketlere bağlanır. V-döngüsü adımı seçilen paketler V-döngüsü görünümünde ilerlemeyi besler.</div>';
       if (M.list === 'systems') h += '<div class="pl-muted sm">Görevler, görev penceresindeki "Sistem" alanından bu sistemlere bağlanır; tasarım kartları da sistemlere göre gruplanır.</div>';
     }
     h += '</div><div class="pl-mf"><span class="pl-muted sm">Değişiklikler otomatik kaydedilir.</span><button type="button" class="pl-btn pri" data-pa="closem">Tamam</button></div></div>';
