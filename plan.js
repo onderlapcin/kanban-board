@@ -268,7 +268,7 @@
       (s.next ? '<div class="pl-kpi"><b>' + daysTo(s.next.date) + ' gün</b><span>' + esc((s.next.code ? s.next.code + ' · ' : '') + (s.next.name || '')) + '</span><em>' + fmtD(s.next.date) + '</em></div>' : '') +
       (hasPage(pid, 'guide') ? '<div class="pl-kpi"><b>' + p.components.length + '</b><span>Tasarım kartı</span><em>' + s.dg.ok + ' onaylı · ' + s.dg.review + ' incelemede</em></div>' : '') + '</div>';
     // alt sayfalar
-    h += secT('Alt sayfalar', E ? '<button type="button" class="pl-btn sm" data-kb-addpage="' + esc(pid) + '">+ Sayfa ekle</button>' : '');
+    h += secT('Alt sayfalar', E ? '<button type="button" class="pl-btn sm" data-kb-addpage="' + esc(pid) + '">Düzenle</button>' : '');
     h += '<div class="pl-cards">';
     p.pages.forEach(function (pg) {
       if (pg.type === 'overview') return;
