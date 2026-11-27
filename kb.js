@@ -742,7 +742,7 @@
   (function () {
     var TEXT = [['#B9052D', 'Kırmızı'], ['#0087A0', 'Petrol'], ['#E67319', 'Turuncu'], ['#2E8B57', 'Yeşil'], ['#797979', 'Gri']];
     var HILITE = [['#FFE29A', 'Sarı'], ['#B8E0C8', 'Nane'], ['#B5D8F5', 'Açık mavi'], ['#F4B6C2', 'Pembe'], ['#C9B6E4', 'Lavanta']];
-    var ALLOWED = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', S: 's', STRIKE: 's', DEL: 's', BR: 'br', DIV: 'div', P: 'div', UL: 'ul', OL: 'ol', LI: 'li', SPAN: 'span', FONT: 'span', MARK: 'span', A: 'a' };
+    var ALLOWED = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', S: 's', STRIKE: 's', DEL: 's', BR: 'br', DIV: 'div', P: 'div', H1: 'h2', H2: 'h2', H3: 'h3', H4: 'h3', UL: 'ul', OL: 'ol', LI: 'li', SPAN: 'span', FONT: 'span', MARK: 'span', A: 'a' };
     function okHref(h) { h = String(h || '').trim(); return /^(https?:\/\/|mailto:)/i.test(h) ? h : ''; }
     var COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|transparent)$/i;
     function cleanStyle(el) {
@@ -789,7 +789,9 @@
       '.kb-rte-tb button,.kb-rte-fl button{width:30px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--text-primary);cursor:pointer;font:600 13px inherit;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;padding:0}' +
       '.kb-rte-tb button:hover,.kb-rte-fl button:hover{background:var(--surface-muted)}' +
       '.kb-rte-tb .sep,.kb-rte-fl .sep{width:1px;height:18px;background:var(--border-default);margin:0 4px}' +
-      '.kb-rte-ed{outline:none;word-break:break-word}.kb-rte-fl.kb-nolist .kb-ls{display:none}' +
+      '.kb-rte-ed{outline:none;word-break:break-word}.kb-rte-fl.kb-nolist .kb-ls,.kb-rte-fl.kb-nohead .kb-hs{display:none}.kb-rte-fl button.kb-dd{width:auto;padding:0 6px;gap:3px}' +
+      '.kb-rte-pop.kb-rte-menu{display:flex;flex-direction:column;gap:2px;padding:4px;min-width:200px}.kb-rte-menu button{display:flex;align-items:center;gap:10px;border:0;background:transparent;border-radius:4px;padding:7px 10px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;color:var(--text-primary)}.kb-rte-menu button:hover{background:var(--surface-subtle)}' +
+      '.kb-rte-ed h2{font-size:20px;font-weight:600;margin:14px 0 6px;line-height:1.3}.kb-rte-ed h3{font-size:16px;font-weight:600;margin:12px 0 4px;line-height:1.35}.kb-rte-ed h2:first-child,.kb-rte-ed h3:first-child{margin-top:0}' +
       '.kb-rte-ed[data-kind="cmt"],.kb-rte-ed[data-kind="cmte"]{min-height:1.5em;padding:8px 12px;border:1px solid var(--border-default);border-radius:5px;font-size:13px;line-height:1.5;color:var(--text-primary);background:var(--surface-page)}.kb-rte-ed[data-kind="cmte"]{font-size:14px;min-height:4.5em}.kb-rte-ed[data-kind="cmt"]:focus,.kb-rte-ed[data-kind="cmte"]:focus{border-color:#B9052D}' +
       '.kb-rte-ed ul,.kb-rte-ed ol,.kb-html-view ul,.kb-html-view ol{margin:4px 0;padding-left:22px}.kb-html-view a{color:#0087A0;text-decoration:underline;text-underline-offset:2px;word-break:break-all}html[data-theme="dark"] .kb-html-view a{color:#4FC3D6}' +
       '.kb-html-view div[data-chk]{position:relative;padding-left:26px}.kb-html-view div[data-chk]::before{content:"";position:absolute;left:2px;top:.22em;width:14px;height:14px;border:1.5px solid var(--text-muted);border-radius:3px;box-sizing:border-box}.kb-html-view div[data-chk="1"]::before{background:#B9052D;border-color:#B9052D}.kb-html-view div[data-chk="1"]{color:var(--text-muted);text-decoration:line-through}' +
@@ -954,7 +956,64 @@
       blocks.forEach(function (x) { if (on) x.setAttribute('data-chk', '0'); else x.removeAttribute('data-chk'); });
       saveSel(); queueSave(ed, true);
     }
-    function makeButtons(bar, withList) {
+    // açılır grup: seçenekler listesi
+    function openMenu(btn, items) {
+      closePop();
+      pop = document.createElement('div'); pop.className = 'kb-rte-pop kb-rte-menu'; pop.setAttribute('role', 'menu');
+      items.forEach(function (it) {
+        var b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.innerHTML = it[1];
+        b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        b.addEventListener('click', function () { closePop(); it[2](); });
+        pop.appendChild(b);
+      });
+      document.body.appendChild(pop);
+      var r = btn.getBoundingClientRect();
+      pop.style.top = (r.bottom + 6) + 'px';
+      pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+    }
+    function setBlock(tag) {
+      restoreSel();
+      var ed = edOfSel(); if (!ed) return;
+      var s = window.getSelection(), an = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement);
+      var li = an && an.closest && an.closest('li');
+      if (li && ed.contains(li) && tag !== 'div') { var l = li.parentElement; try { document.execCommand(l && l.tagName === 'OL' ? 'insertOrderedList' : 'insertUnorderedList'); } catch (e) {} }
+      var chk = an && an.closest && an.closest('div[data-chk]'); if (chk && ed.contains(chk) && tag !== 'div') chk.removeAttribute('data-chk');
+      try { document.execCommand('formatBlock', false, '<' + tag + '>'); } catch (e) {}
+      saveSel(); queueSave(ed, true);
+    }
+    var CHEV = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+    function makeButtons(bar, withList, compact) {
+      if (compact) {   // seçince açılan çubuk: başlıklar ve listeler açılır grupta
+        var defs2 = [
+          ['@@style', '<span style="font-weight:600;font-size:12px">Aa</span>' + CHEV, 'Metin stili: başlık, alt başlık, metin', 'H'], ['|', 'H'],
+          ['bold', '<b>B</b>', 'Kalın (Ctrl+B)'], ['italic', '<i style="font-weight:500">I</i>', 'İtalik (Ctrl+I)'], ['underline', '<span style="text-decoration:underline;font-weight:500">U</span>', 'Altı çizili (Ctrl+U)'], ['strikeThrough', ICON.strike, 'Üstü çizili'], ['|'],
+          ['@color', ICON.color, 'Yazı rengi'], ['@hilite', ICON.hilite, 'Vurgula'], ['|', 'L'],
+          ['@@lists', ICON.list + CHEV, 'Listeler: madde işaretli, numaralı, onay kutulu', 'L'], ['|'],
+          ['@@link', ICON.link, 'Bağlantı ekle (Ctrl+K)'], ['removeFormat', ICON.clear, 'Biçimi temizle']];
+        defs2.forEach(function (d) {
+          if (d[0] === '|') { var sp = document.createElement('span'); sp.className = 'sep' + (d[1] === 'L' ? ' kb-ls' : d[1] === 'H' ? ' kb-hs' : ''); bar.appendChild(sp); return; }
+          var b = document.createElement('button'); b.type = 'button'; b.innerHTML = d[1]; b.title = d[2]; b.setAttribute('aria-label', d[2]);
+          if (d[3] === 'L') b.className = 'kb-ls kb-dd'; if (d[3] === 'H') b.className = 'kb-hs kb-dd';
+          if (d[0].indexOf('@@') === 0 && d[0] !== '@@link') b.setAttribute('aria-haspopup', 'menu');
+          b.addEventListener('mousedown', function (e) { e.preventDefault(); saveSel(); });
+          b.addEventListener('click', function () {
+            if (d[0] === '@@style') { if (pop) { closePop(); return; } openMenu(b, [
+              ['h2', '<span style="font-size:17px;font-weight:600">Başlık</span>', function () { setBlock('h2'); }],
+              ['h3', '<span style="font-size:14px;font-weight:600">Alt başlık</span>', function () { setBlock('h3'); }],
+              ['div', '<span style="font-size:13px">Metin</span>', function () { setBlock('div'); }]]); }
+            else if (d[0] === '@@lists') { if (pop) { closePop(); return; } openMenu(b, [
+              ['ul', ICON.list + '<span>Madde işaretli liste</span>', function () { exec('insertUnorderedList'); }],
+              ['ol', ICON.olist + '<span>Numaralı liste</span>', function () { exec('insertOrderedList'); }],
+              ['chk', ICON.check + '<span>Onay kutulu liste</span>', function () { toggleCheck(); }]]); }
+            else if (d[0] === '@@link') { if (pop) { closePop(); return; } openLinkPop(b.getBoundingClientRect()); }
+            else if (d[0].charAt(0) === '@') { if (pop) { closePop(); return; } openPop(b, d[0].slice(1)); }
+            else if (d[0] === 'removeFormat') { exec('removeFormat'); exec('hiliteColor', 'transparent'); }
+            else exec(d[0]);
+          });
+          bar.appendChild(b);
+        });
+        return;
+      }
       var defs = [['bold', '<b>B</b>', 'Kalın (Ctrl+B)'], ['italic', '<i style="font-weight:500">I</i>', 'İtalik (Ctrl+I)'], ['underline', '<span style="text-decoration:underline;font-weight:500">U</span>', 'Altı çizili (Ctrl+U)'], ['strikeThrough', ICON.strike, 'Üstü çizili'], ['|'],
         ['@color', ICON.color, 'Yazı rengi'], ['@hilite', ICON.hilite, 'Vurgula']];
       if (withList) defs.push(['|', 'L'], ['insertUnorderedList', ICON.list, 'Madde işaretli liste', 'L'], ['insertOrderedList', ICON.olist, 'Numaralı liste', 'L'], ['@@check', ICON.check, 'Onay kutulu liste', 'L']);
@@ -1129,9 +1188,10 @@
       if (!ed || !ed.isContentEditable || ed.getAttribute('data-kind') === 'desc') { hideFl(); return; }
       if (!fl) {
         fl = document.createElement('div'); fl.className = 'kb-rte-fl'; fl.setAttribute('role', 'toolbar'); fl.setAttribute('aria-label', 'Metin biçimlendirme');
-        makeButtons(fl, true); document.body.appendChild(fl);
+        makeButtons(fl, true, true); document.body.appendChild(fl);
       }
       fl.classList.toggle('kb-nolist', ed.getAttribute('data-kind') === 'sub');   // alt görevler tek satır: liste yok
+      fl.classList.toggle('kb-nohead', ed.getAttribute('data-kind') !== 'plan');  // başlıklar yalnızca proje sayfalarında
       fl.style.display = 'flex';
       var r = s.getRangeAt(0).getBoundingClientRect(), w = fl.offsetWidth, h = fl.offsetHeight;
       var top = r.top - h - 8; if (top < 8) top = r.bottom + 8;

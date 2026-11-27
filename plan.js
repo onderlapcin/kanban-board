@@ -524,8 +524,7 @@
     if (!pg) return '<div class="pl-in"><div class="pl-muted">Sayfa bulunamadı.</div></div>';
     var B = 'pages.' + i + '.';
     return '<div class="pl-in note"><input class="pl-ttl big" data-b="' + B + 'title" data-nav="1" value="' + esc(pg.title || '') + '" placeholder="Başlıksız sayfa"' + ro(pid) + '>' +
-      (E ? '<div class="pl-fmt" role="toolbar" aria-label="Biçim"><button type="button" data-pa="fmt" data-f="h2">Başlık</button><button type="button" data-pa="fmt" data-f="h3">Alt başlık</button><button type="button" data-pa="fmt" data-f="p">Metin</button><button type="button" data-pa="fmt" data-f="ul">• Liste</button><button type="button" data-pa="fmt" data-f="ol">1. Liste</button><button type="button" data-pa="fmt" data-f="b"><b>B</b></button><button type="button" data-pa="fmt" data-f="i"><i>I</i></button></div>' : '') +
-      '<div class="pl-body kb-rte-ed" data-kind="plan" data-b="' + B + 'body" data-t="html" contenteditable="' + (E ? 'true' : 'false') + '" data-ph="Yazmaya başla… Toplantı notları, kararlar, kontrol listeleri.">' + clean(pg.body || '') + '</div></div>';
+      '<div class="pl-body kb-rte-ed" data-kind="plan" data-b="' + B + 'body" data-t="html" contenteditable="' + (E ? 'true' : 'false') + '" data-ph="Yazmaya başla… Biçimlendirmek, başlık ya da liste yapmak için metni seç.">' + clean(pg.body || '') + '</div></div>';
   }
 
   /* ---------- güvenli HTML ---------- */
