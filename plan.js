@@ -387,10 +387,10 @@
       return h;
     }
     h += '<div class="pl-dg"><div class="pl-dgl">';
-    var groups = p.systems.map(function (sy) { return { name: sy.name || 'Adsız sistem', ks: comps.filter(function (k) { return k.sys === sy.id; }) }; });
+    var groups = p.systems.map(function (sy) { return { sys: sy.id, name: sy.name || 'Adsız sistem', ks: comps.filter(function (k) { return k.sys === sy.id; }) }; });
     var orphan = comps.filter(function (k) { return !p.systems.some(function (sy) { return sy.id === k.sys; }); });
     if (orphan.length) groups.push({ name: 'Sistem atanmamış', ks: orphan });
-    groups.forEach(function (g) { if (!g.ks.length) return; h += '<div class="pl-dgs">' + esc(g.name) + '</div>' + g.ks.map(function (k) { return '<button type="button" class="' + (k.id === selId ? 'on' : '') + '" data-pa="dg" data-id="' + esc(k.id) + '"><span>' + esc(k.name || 'Adsız komponent') + '</span>' + pill(DSTAT[k.status || 'draft']) + '</button>'; }).join(''); });
+    groups.forEach(function (g) { h += '<div class="pl-dgs">' + esc(g.name) + '</div>' + (!g.ks.length ? (E && g.sys ? '<button type="button" class="pl-dgadd" data-pa="addcomp" data-sys="' + esc(g.sys) + '">+ Kart ekle</button>' : '<div class="pl-dgnone">Henüz kart yok</div>') : '') + g.ks.map(function (k) { return '<button type="button" class="' + (k.id === selId ? 'on' : '') + '" data-pa="dg" data-id="' + esc(k.id) + '"><span>' + esc(k.name || 'Adsız komponent') + '</span>' + pill(DSTAT[k.status || 'draft']) + '</button>'; }).join(''); });
     h += '</div>';
     var ki = p.components.findIndex(function (k) { return k.id === selId; }), k = p.components[ki];
     if (k) {
@@ -725,7 +725,8 @@
     if (act === 'addcomp') {
       var p1 = plan(pid); if (!p1.systems.length) { openModal(pid, 'systems'); return; }
       var cid = uid(), curSel = p1.components.find(function (k) { return k.id === UI.dg[pid]; });
-      patch(pid, function (p) { p.components.push({ id: cid, sys: (curSel && curSel.sys) || p.systems[0].id, name: '', status: 'draft', rev: 'A', owners: st().me ? [st().me] : [], reqs: [], rules: [], clear: [], std: [], notes: '' }); });
+      var wantSys = a.getAttribute('data-sys');
+      patch(pid, function (p) { p.components.push({ id: cid, sys: wantSys || (curSel && curSel.sys) || p.systems[0].id, name: '', status: 'draft', rev: 'A', owners: st().me ? [st().me] : [], reqs: [], rules: [], clear: [], std: [], notes: '' }); });
       UI.dg[pid] = cid; UI.dgQ = ''; refresh(true);
       setTimeout(function () { var f = document.querySelector('.kb-plan-host .pl-comp .pl-ttl'); if (f) f.focus(); }, 60);
       return;
@@ -904,6 +905,7 @@
     '.pl-dg{display:grid;grid-template-columns:290px minmax(0,1fr);gap:20px;align-items:start}' +
     '.pl-dgl{border:1px solid var(--border-default);border-radius:6px;overflow:hidden;position:sticky;top:0}.pl-dgs{padding:10px 14px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);background:var(--surface-subtle);border-bottom:1px solid var(--border-default)}' +
     '.pl-dgl button{display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid var(--surface-subtle);background:var(--surface-page);text-align:left;padding:10px 14px;cursor:pointer;font-size:13px}.pl-dgl button>span:first-child{flex:1;min-width:0}.pl-dgl button:hover{background:var(--surface-subtle)}.pl-dgl button.on{background:rgba(185,5,45,.08);color:var(--text-accent);font-weight:600}' +
+    '.pl-dgl button.pl-dgadd{color:var(--text-muted);font-size:12px;font-weight:600}.pl-dgl button.pl-dgadd:hover{color:var(--text-accent)}.pl-dgnone{padding:10px 14px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--surface-subtle)}' +
     '.pl-comp{gap:16px}.pl-ttl{font-size:22px;font-weight:600;border:1px solid transparent;border-radius:5px;padding:4px 6px;margin-left:-7px;outline:none;background:transparent;width:100%}.pl-ttl:hover{border-color:var(--border-default)}.pl-ttl:focus{border-color:#B9052D}.pl-ttl.big{font-size:30px;margin-left:-7px}' +
     '.pl-props,.pl-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 14px}.pl-props label,.pl-form label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;letter-spacing:.05em;color:var(--text-muted);text-transform:uppercase}.pl-props label.wide,.pl-form label.wide{grid-column:1/-1}' +
     '.pl-props input,.pl-props select,.pl-form input,.pl-form select,.pl-form textarea,.pl-area{font-size:13px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-primary);padding:7px 10px;border:1px solid var(--border-default);border-radius:5px;background:var(--surface-page);outline:none;width:100%;box-sizing:border-box}' +
