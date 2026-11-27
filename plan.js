@@ -214,6 +214,9 @@
   function dDiff(a, b) { return Math.round((dParse(b) - dParse(a)) / 864e5); }
   function isYM(v) { return /^\d{4}-\d{2}$/.test(v || ''); }
   function lastOfMonth(ym) { var p = ym.split('-'); return dFmt(new Date(Date.UTC(+p[0], +p[1], 0))); }
+  // iş günü ölçeği (cumartesi-pazar çizelgede yok)
+  function wdc(a, b) { var n = dDiff(a, b); if (n <= 0) return 0; var w = Math.floor(n / 7) * 5, r = n % 7, dw = (dParse(a).getUTCDay() + 6) % 7; for (var i = 0; i < r; i++) if ((dw + i) % 7 < 5) w++; return w; }
+  function fromWd(gs, n) { var st = gs, dw = (dParse(st).getUTCDay() + 6) % 7; if (dw > 4) { st = addDays(st, 7 - dw); dw = 0; } var t = dw + Math.max(0, n); return addDays(addDays(st, -dw), Math.floor(t / 5) * 7 + t % 5); }
   function mondayOf(v) { return addDays(v, -((dParse(v).getUTCDay() + 6) % 7)); }
   function isoW(v) { var t = dParse(v), dn = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - dn); var y1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y1) / 864e5 + 1) / 7); }
   function fmtR(a, b) { if (!a) return ''; return fmtDs(a) + (a.slice(0, 4) !== (b || a).slice(0, 4) ? ' ' + a.slice(0, 4) : '') + ' – ' + fmtDs(b || a) + ' ' + (b || a).slice(0, 4); }
@@ -363,18 +366,18 @@
     var p = plan(pid), r = range(p), m0 = mIdx(r[0]), m1 = mIdx(r[1]) + 1, nm = Math.max(1, m1 - m0);
     // gün ölçeği: her gün eşit genişlikte (Ay görünümünde günler ve haftalar görünür)
     function mStart(mi) { return Math.floor(mi / 12) + '-' + String(mi % 12 + 1).padStart(2, '0') + '-01'; }
-    var gs = mStart(m0), ge = mStart(m1), tot = Math.max(1, dDiff(gs, ge));
-    var dpx = UI.zoom === 'month' ? 8 : 0.75, W = Math.round(tot * dpx);
-    function xd(d) { return dDiff(gs, d) * dpx; }
+    var gs = mStart(m0), ge = mStart(m1), tot = Math.max(1, wdc(gs, ge));
+    var dpx = UI.zoom === 'month' ? 11 : 1.05, W = Math.round(tot * dpx);
+    function xd(d) { return wdc(gs, d) * dpx; }
     function P(v) { return (Math.max(0, Math.min(W, v)) / W * 100).toFixed(4) + '%'; }
     var months = '', grid = '';
     for (var i = 0; i < nm; i++) {
-      var mi = m0 + i, y = Math.floor(mi / 12), mo = mi % 12, mw = dDiff(mStart(mi), mStart(mi + 1)) * dpx;
+      var mi = m0 + i, y = Math.floor(mi / 12), mo = mi % 12, mw = wdc(mStart(mi), mStart(mi + 1)) * dpx;
       if (UI.zoom === 'month') months += '<div style="width:' + P(mw) + '"><span><b>' + MON[mo] + '</b>' + (mo === 0 || i === 0 ? ' ' + y : '') + '</span></div>';
-      else if (mo % 3 === 0 || i === 0) { var span = Math.min(3 - (mo % 3), nm - i); months += '<div style="width:' + P(dDiff(mStart(mi), mStart(mi + span)) * dpx) + '">' + (mo < 3 || i === 0 ? '<b>' + y + '</b>' : '&nbsp;') + '<span>Ç' + (Math.floor(mo / 3) + 1) + '</span></div>'; }
+      else if (mo % 3 === 0 || i === 0) { var span = Math.min(3 - (mo % 3), nm - i); months += '<div style="width:' + P(wdc(mStart(mi), mStart(mi + span)) * dpx) + '">' + (mo < 3 || i === 0 ? '<b>' + y + '</b>' : '&nbsp;') + '<span>Ç' + (Math.floor(mo / 3) + 1) + '</span></div>'; }
       grid += '<div style="width:' + P(mw) + ';' + (UI.zoom === 'quarter' && mo % 3 !== 0 ? 'border-left-color:transparent' : '') + '"></div>';
     }
-    // ISO hafta numaraları + haftayı 5 iş gününe bölen çizgiler (pazartesi ve cuma bitişi düz, aradaki günler kesikli, hafta sonu gölgeli)
+    // ISO hafta numaraları + haftayı 5 iş gününe bölen çizgiler (hafta başı/bitişi düz, aradaki günler kesikli)
     var weeks = '', wlayer = '';
     if (UI.zoom === 'month') {
       var dd = mondayOf(gs), T0 = todayStr();
@@ -386,9 +389,9 @@
       var fm = mondayOf(gs); if (fm < gs) fm = addDays(fm, 7);
       var L0 = xd(fm), LW = W - L0;
       if (LW > 0) {
-        var per = 7 * dpx / LW * 100, q = function (k) { return (per * k / 7).toFixed(5) + '%'; };
-        var solid = 'repeating-linear-gradient(to right,var(--gwl) 0,var(--gwl) 1px,transparent 1px,transparent ' + q(5) + ',var(--gwl) ' + q(5) + ',var(--gwl) calc(' + q(5) + ' + 1px),var(--gwe) calc(' + q(5) + ' + 1px),var(--gwe) ' + q(7) + ')';
-        var dash = 'repeating-linear-gradient(to right,transparent 0' + [1, 2, 3, 4].map(function (k) { return ',transparent ' + q(k) + ',var(--gdl) ' + q(k) + ',var(--gdl) calc(' + q(k) + ' + 1px),transparent calc(' + q(k) + ' + 1px)'; }).join('') + ',transparent ' + q(7) + ')';
+        var per = 5 * dpx / LW * 100, q = function (k) { return (per * k / 5).toFixed(5) + '%'; };
+        var solid = 'repeating-linear-gradient(to right,var(--gwl) 0,var(--gwl) 1px,transparent 1px,transparent ' + q(5) + ')';
+        var dash = 'repeating-linear-gradient(to right,transparent 0' + [1, 2, 3, 4].map(function (k) { return ',transparent ' + q(k) + ',var(--gdl) ' + q(k) + ',var(--gdl) calc(' + q(k) + ' + 1px),transparent calc(' + q(k) + ' + 1px)'; }).join('') + ',transparent ' + q(5) + ')';
         wlayer = '<div class="g-wkl" style="left:' + P(L0) + ';background-image:' + solid + '"></div><div class="g-dyl" style="left:' + P(L0) + ';background-image:' + dash + '"></div>';
       }
     }
@@ -1065,7 +1068,7 @@
     var pid = pidOf(bar); if (!pid || !canEdit(pid)) return;
     var tbl = bar.closest('.g-tbl'), tl = bar.closest('.g-tl');
     e.preventDefault();
-    var gs = tbl.getAttribute('data-gs'), ge = tbl.getAttribute('data-ge'), tot = Math.max(1, dDiff(gs, ge));
+    var gs = tbl.getAttribute('data-gs'), ge = tbl.getAttribute('data-ge'), tot = Math.max(1, wdc(gs, ge));
     bdrag = { pid: pid, bar: bar, kind: bar.getAttribute('data-bk'), id: bar.getAttribute('data-bid'), edge: e.target.getAttribute('data-edge') || 'm', x0: e.clientX,
       s: bar.getAttribute('data-s'), e: bar.getAttribute('data-e'), gs: gs, ge: ge, tot: tot, dpx: tl.clientWidth / tot, left: tl.getBoundingClientRect().left };
     try { bar.setPointerCapture(e.pointerId); } catch (x) {}
@@ -1073,16 +1076,16 @@
   }, true);
   document.addEventListener('pointermove', function (e) {
     if (!bdrag) return;
-    var d = bdrag, s = d.s, en = d.e, last = addDays(d.ge, -1);
-    var at = addDays(d.gs, Math.round((e.clientX - d.left) / d.dpx));   // imlecin altındaki gün
-    if (d.edge === 'm') { var dw = Math.round((e.clientX - d.x0) / d.dpx); s = addDays(d.s, dw); en = addDays(d.e, dw);
-      if (s < d.gs) { var k = dDiff(s, d.gs); s = addDays(s, k); en = addDays(en, k); }
-      if (en > last) { var k2 = dDiff(last, en); s = addDays(s, -k2); en = addDays(en, -k2); } }
-    else if (d.edge === 's') { s = at; if (s > en) s = en; if (s < d.gs) s = d.gs; }
-    else { en = addDays(at, -1); if (en < s) en = s; if (en > last) en = last; }
+    var d = bdrag, gs = d.gs, s = d.s, en = d.e, idx = Math.round((e.clientX - d.left) / d.dpx);   // imlecin altındaki iş günü
+    function wi(v) { return wdc(gs, v); }
+    var si = wi(d.s), ei = wi(addDays(d.e, 1)) - 1;   // başlangıç ve bitiş iş günü sırası
+    if (d.edge === 'm') { var n = Math.round((e.clientX - d.x0) / d.dpx); n = Math.max(-si, Math.min(d.tot - 1 - ei, n)); si += n; ei += n; }
+    else if (d.edge === 's') { si = Math.max(0, Math.min(ei, idx)); }
+    else { ei = Math.min(d.tot - 1, Math.max(si, idx - 1)); }
+    s = fromWd(gs, si); en = fromWd(gs, ei);
     d.r = [s, en];
-    d.bar.style.left = (dDiff(d.gs, s) / d.tot * 100).toFixed(4) + '%'; d.bar.style.width = ((dDiff(s, en) + 1) / d.tot * 100).toFixed(4) + '%';
-    barTip(fmtR(s, en) + '  ·  H' + isoW(s) + ' – H' + isoW(en) + '  ·  ' + (dDiff(s, en) + 1) + ' gün', e.clientX, e.clientY);
+    d.bar.style.left = (si / d.tot * 100).toFixed(4) + '%'; d.bar.style.width = ((ei - si + 1) / d.tot * 100).toFixed(4) + '%';
+    barTip(fmtR(s, en) + '  ·  H' + isoW(s) + ' – H' + isoW(en) + '  ·  ' + (ei - si + 1) + ' iş günü', e.clientX, e.clientY);
   }, true);
   function endBar(e) {
     if (!bdrag) return;
