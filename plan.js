@@ -8,11 +8,11 @@
     ['#F4B6C2','#000'],['#FFCBA4','#000'],['#FFE29A','#000'],['#B8E0C8','#000'],['#B5D8F5','#000'],['#C9B6E4','#000'],['#D9C7B8','#000'],['#CFD8DC','#000']];
   var MON = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
   var PAGE = {
-    overview: { label: 'Genel bakış', icon: 'over' },
-    board: { label: 'Görev panosu', icon: 'board', desc: 'Günlük görev takibi (Kanban)' },
-    timeline: { label: 'Proje zaman çizelgesi', icon: 'time', desc: 'Gantt ve V-döngüsü: fazlar, iş paketleri, kilometre taşları' },
+    overview: { label: 'Genel Bakış', icon: 'over' },
+    board: { label: 'Görev Panosu', icon: 'board', desc: 'Günlük görev takibi (Kanban)' },
+    timeline: { label: 'Proje Zaman Çizelgesi', icon: 'time', desc: 'Gantt ve V-döngüsü: fazlar, iş paketleri, kilometre taşları' },
     guide: { label: 'Sistem Tasarımı', icon: 'guide', desc: 'Sistem ve komponent kartları: gereksinimler, kurallar, clearance' },
-    note: { label: 'Boş sayfa', icon: 'page', desc: 'Notlar, toplantı tutanakları, kararlar' }
+    note: { label: 'Boş Sayfa', icon: 'page', desc: 'Notlar, toplantı tutanakları, kararlar' }
   };
   var TEMPLATES = ['board', 'timeline', 'guide', 'note'];
   var VSTEPS = [
@@ -164,7 +164,9 @@
     var pg = plan(pid).pages;
     return pg.some(function (x) { return x.type === 'overview'; }) ? pg.slice() : [{ id: 'overview', type: 'overview' }].concat(pg);
   }
-  function pageLabel(pg) { return pg.title || (pg.type === 'note' ? 'Başlıksız sayfa' : PAGE[pg.type].label); }
+  // sayfa adları: her kelimenin baş harfi büyük (Türkçe kurallarıyla)
+  function tc(v) { return String(v || '').split(/(\s+)/).map(function (w) { return w ? w.charAt(0).toLocaleUpperCase('tr') + w.slice(1) : w; }).join(''); }
+  function pageLabel(pg) { return tc(pg.title) || (pg.type === 'note' ? 'Başlıksız Sayfa' : PAGE[pg.type].label); }
   function getSub(pid) {
     var s = subOf[pid] || 'overview';
     return pagesOf(pid).some(function (p) { return p.id === s; }) ? s : 'overview';
@@ -525,7 +527,7 @@
     var p = plan(pid), i = p.pages.findIndex(function (x) { return x.id === pgId; }), pg = p.pages[i], E = canEdit(pid);
     if (!pg) return '<div class="pl-in"><div class="pl-muted">Sayfa bulunamadı.</div></div>';
     var B = 'pages.' + i + '.';
-    return '<div class="pl-in note"><input class="pl-ttl big" data-b="' + B + 'title" data-nav="1" value="' + esc(pg.title || '') + '" placeholder="Başlıksız sayfa"' + ro(pid) + '>' +
+    return '<div class="pl-in note"><input class="pl-ttl big" data-b="' + B + 'title" data-nav="1" value="' + esc(pg.title || '') + '" placeholder="Başlıksız Sayfa"' + ro(pid) + '>' +
       '<div class="pl-body kb-rte-ed" data-kind="plan" data-b="' + B + 'body" data-t="html" contenteditable="' + (E ? 'true' : 'false') + '" data-ph="Yazmaya başla… Biçimlendirmek, başlık ya da liste yapmak için metni seç.">' + clean(pg.body || '') + '</div></div>';
   }
 
@@ -1000,7 +1002,7 @@
     var old = document.getElementById('kbpl-ren'); if (old) old.remove();
     var r = b.getBoundingClientRect(), inp = document.createElement('input');
     inp.id = 'kbpl-ren'; inp.className = 'pl-ren'; inp.value = pageLabel(pg); inp.setAttribute('aria-label', 'Sayfa adı');
-    inp.placeholder = pg.type === 'note' ? 'Başlıksız sayfa' : PAGE[pg.type].label;
+    inp.placeholder = pg.type === 'note' ? 'Başlıksız Sayfa' : PAGE[pg.type].label;
     inp.style.top = r.top + 'px'; inp.style.left = r.left + 'px'; inp.style.width = Math.max(r.width, 170) + 'px'; inp.style.height = r.height + 'px';
     document.body.appendChild(inp); inp.focus(); inp.select();
     var done = false;
