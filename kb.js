@@ -789,7 +789,7 @@
       '.kb-rte-tb button,.kb-rte-fl button{width:30px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--text-primary);cursor:pointer;font:600 13px inherit;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;padding:0}' +
       '.kb-rte-tb button:hover,.kb-rte-fl button:hover{background:var(--surface-muted)}' +
       '.kb-rte-tb .sep,.kb-rte-fl .sep{width:1px;height:18px;background:var(--border-default);margin:0 4px}' +
-      '.kb-rte-ed{outline:none;word-break:break-word}' +
+      '.kb-rte-ed{outline:none;word-break:break-word}.kb-rte-fl.kb-nolist .kb-ls{display:none}' +
       '.kb-rte-ed[data-kind="cmt"],.kb-rte-ed[data-kind="cmte"]{min-height:1.5em;padding:8px 12px;border:1px solid var(--border-default);border-radius:5px;font-size:13px;line-height:1.5;color:var(--text-primary);background:var(--surface-page)}.kb-rte-ed[data-kind="cmte"]{font-size:14px;min-height:4.5em}.kb-rte-ed[data-kind="cmt"]:focus,.kb-rte-ed[data-kind="cmte"]:focus{border-color:#B9052D}' +
       '.kb-rte-ed ul,.kb-rte-ed ol,.kb-html-view ul,.kb-html-view ol{margin:4px 0;padding-left:22px}.kb-html-view a{color:#0087A0;text-decoration:underline;text-underline-offset:2px;word-break:break-all}html[data-theme="dark"] .kb-html-view a{color:#4FC3D6}' +
       '.kb-html-view div[data-chk]{position:relative;padding-left:26px}.kb-html-view div[data-chk]::before{content:"";position:absolute;left:2px;top:.22em;width:14px;height:14px;border:1.5px solid var(--text-muted);border-radius:3px;box-sizing:border-box}.kb-html-view div[data-chk="1"]::before{background:#B9052D;border-color:#B9052D}.kb-html-view div[data-chk="1"]{color:var(--text-muted);text-decoration:line-through}' +
@@ -936,7 +936,7 @@
     }
     function toggleCheck() {
       restoreSel();
-      var ed = edOfSel(); if (!ed || ed.getAttribute('data-kind') !== 'desc') return;
+      var ed = edOfSel(); if (!ed || ed.getAttribute('data-kind') === 'sub') return;
       var s = window.getSelection(), an = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement);
       if (an && an.closest && an.closest('li')) return;
       var b = blockOf(ed, s.anchorNode);
@@ -957,12 +957,12 @@
     function makeButtons(bar, withList) {
       var defs = [['bold', '<b>B</b>', 'Kalın (Ctrl+B)'], ['italic', '<i style="font-weight:500">I</i>', 'İtalik (Ctrl+I)'], ['underline', '<span style="text-decoration:underline;font-weight:500">U</span>', 'Altı çizili (Ctrl+U)'], ['strikeThrough', ICON.strike, 'Üstü çizili'], ['|'],
         ['@color', ICON.color, 'Yazı rengi'], ['@hilite', ICON.hilite, 'Vurgula']];
-      if (withList) defs.push(['|'], ['insertUnorderedList', ICON.list, 'Madde işaretli liste'], ['insertOrderedList', ICON.olist, 'Numaralı liste'], ['@@check', ICON.check, 'Onay kutulu liste']);
+      if (withList) defs.push(['|', 'L'], ['insertUnorderedList', ICON.list, 'Madde işaretli liste', 'L'], ['insertOrderedList', ICON.olist, 'Numaralı liste', 'L'], ['@@check', ICON.check, 'Onay kutulu liste', 'L']);
       defs.push(['@@link', ICON.link, 'Bağlantı ekle (Ctrl+K)']);
       defs.push(['removeFormat', ICON.clear, 'Biçimi temizle']);
       defs.forEach(function (d) {
-        if (d[0] === '|') { var sp = document.createElement('span'); sp.className = 'sep'; bar.appendChild(sp); return; }
-        var b = document.createElement('button'); b.type = 'button'; b.innerHTML = d[1]; b.title = d[2]; b.setAttribute('aria-label', d[2]);
+        if (d[0] === '|') { var sp = document.createElement('span'); sp.className = 'sep' + (d[1] === 'L' ? ' kb-ls' : ''); bar.appendChild(sp); return; }
+        var b = document.createElement('button'); b.type = 'button'; if (d[3] === 'L') b.className = 'kb-ls'; b.innerHTML = d[1]; b.title = d[2]; b.setAttribute('aria-label', d[2]);
         b.addEventListener('mousedown', function (e) { e.preventDefault(); saveSel(); });
         b.addEventListener('click', function () {
           if (d[0] === '@@check') toggleCheck();
@@ -1022,8 +1022,16 @@
       });
       ed.addEventListener('keydown', function (e) {
         if ((kind === 'cmt' || kind === 'cmte') && e.key === 'Enter' && !e.shiftKey) {
+          var an = window.getSelection().anchorNode, li = an && (an.nodeType === 1 ? an : an.parentElement);
+          li = li && li.closest && li.closest('li,div[data-chk]');
+          if (li && ed.contains(li) && li.textContent.trim()) {
+            if (li.tagName === 'DIV') setTimeout(function () { var nb = blockOf(ed, window.getSelection().anchorNode); if (nb && nb !== li && nb.hasAttribute('data-chk')) nb.setAttribute('data-chk', '0'); }, 0);
+            return;
+          }
+          if (li && ed.contains(li) && li.tagName === 'DIV') { e.preventDefault(); li.removeAttribute('data-chk'); queueSave(ed, true); return; }
+          if (li && ed.contains(li) && li.tagName === 'LI') { e.preventDefault(); var lst = li.parentElement; try { document.execCommand(lst && lst.tagName === 'OL' ? 'insertOrderedList' : 'insertUnorderedList'); } catch (err) {} queueSave(ed, true); return; }
           e.preventDefault();
-          var h0 = sanitize(ed.innerHTML), t0 = textOf(ed);
+          var h0 = sanitize(ed.innerHTML).replace(/(<br\s*\/?>|<li><br><\/li>|<div><br><\/div>)+$/i, '').replace(/(<li><br><\/li>)+(<\/[uo]l>)$/i, '$2'), t0 = textOf(ed);
           flush(ed);
           try { if (api().enter) api().enter(kind, key, h0, t0); } catch (err) {}
           if (kind === 'cmt' && t0.trim()) { ed.innerHTML = ''; host.__last = ''; }
@@ -1121,8 +1129,9 @@
       if (!ed || !ed.isContentEditable || ed.getAttribute('data-kind') === 'desc') { hideFl(); return; }
       if (!fl) {
         fl = document.createElement('div'); fl.className = 'kb-rte-fl'; fl.setAttribute('role', 'toolbar'); fl.setAttribute('aria-label', 'Metin biçimlendirme');
-        makeButtons(fl, false); document.body.appendChild(fl);
+        makeButtons(fl, true); document.body.appendChild(fl);
       }
+      fl.classList.toggle('kb-nolist', ed.getAttribute('data-kind') === 'sub');   // alt görevler tek satır: liste yok
       fl.style.display = 'flex';
       var r = s.getRangeAt(0).getBoundingClientRect(), w = fl.offsetWidth, h = fl.offsetHeight;
       var top = r.top - h - 8; if (top < 8) top = r.bottom + 8;
