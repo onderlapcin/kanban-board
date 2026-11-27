@@ -308,7 +308,7 @@
     h += '<div class="pl-box">' + secT('Kapsamımız: iş paketleri', editBtn('wps', p.wps.length ? 'Düzenle' : '+ Ekle', pid)) + (p.wps.length ? '<div class="pl-list">' + p.wps.map(function (w) {
       var nt = tasksOf(pid).filter(function (t) { return t.wp === w.id && t.status !== doneId(pid); }).length;
       return '<div class="pl-it"><span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="pl-t"><b>' + esc(w.name || '') + '</b><small>' + (w.start ? fmtM(w.start) + ' – ' + fmtM(w.end) + ' · ' : '') + esc(pname(w.owner)) + (nt ? ' · ' + nt + ' açık görev' : '') + '</small><span class="pl-bar"><span style="width:' + (+w.pct || 0) + '%"></span></span></span><b class="sm nowrap">%' + (+w.pct || 0) + '</b></div>';
-    }).join('') + '</div>' : '<div class="pl-muted">Projede yapmakla görevli olduğumuz işleri (iş paketleri) ekle.</div>') + '</div></div>';
+    }).join('') + '</div>' : '<div class="pl-muted">Projede yapmakla görevli olduğumuz işleri (iş paketleri) ekle.</div>' + (E ? '<div class="pl-row g8"><button type="button" class="pl-btn sm" data-pa="wpsStd">Hazır iş paketlerini ekle</button><span class="pl-muted sm">Mimari, paketleme, simülasyon, komponent tasarımı, DFMEA, prototip/test</span></div>' : '')) + '</div></div>';
     // sistemler
     h += '<div class="pl-box">' + secT('Sistemler', editBtn('systems', p.systems.length ? 'Düzenle' : '+ Ekle', pid)) + (p.systems.length ? '<div class="pl-scroll"><table class="pl-tbl"><thead><tr><th>Sistem</th><th>Sorumlu</th><th class="num">Komponent</th><th class="num">Açık görev</th><th>Tasarım durumu</th></tr></thead><tbody>' + p.systems.map(function (sy) {
       var ks = p.components.filter(function (k) { return k.sys === sy.id; });
@@ -638,7 +638,7 @@
             return '<td><input' + (c[2] !== 'text' ? ' type="' + c[2] + '"' : '') + ' data-b="' + b + '" value="' + esc(v || '') + '" placeholder="' + esc(c[3] || '') + '"></td>';
           }).join('') + '<td>' + delBtn(M.list, i) + '</td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="pl-muted">Henüz kayıt yok.</div>';
-      h += '<div class="pl-row g8"><button type="button" class="pl-btn" data-pa="addm">+ Satır ekle</button>' + (M.list === 'phases' && !L.length ? '<button type="button" class="pl-btn" data-pa="phasesStd">Standart otomotiv fazları</button>' : '') + '</div>';
+      h += '<div class="pl-row g8"><button type="button" class="pl-btn" data-pa="addm">+ Satır ekle</button>' + (M.list === 'phases' && !L.length ? '<button type="button" class="pl-btn" data-pa="phasesStd">Standart otomotiv fazları</button>' : '') + (M.list === 'wps' ? '<button type="button" class="pl-btn" data-pa="wpsStd" title="' + esc(STD_WPS.map(function (x) { return x[0]; }).join(' · ')) + '">Hazır iş paketlerini ekle</button>' : '') + '</div>';
       if (M.list === 'wps') h += '<div class="pl-muted sm">Görevler, görev penceresindeki "İş paketi" alanından bu paketlere bağlanır. V-döngüsü adımı seçilen paketler V-döngüsü görünümünde ilerlemeyi besler.</div>';
       if (M.list === 'systems') h += '<div class="pl-muted sm">Görevler, görev penceresindeki "Sistem" alanından bu sistemlere bağlanır; tasarım kartları da sistemlere göre gruplanır.</div>';
     }
@@ -662,6 +662,31 @@
     var r = anchor.getBoundingClientRect(), w = el.offsetWidth;
     el.style.top = Math.min(r.bottom + 6, window.innerHeight - el.offsetHeight - 8) + 'px';
     el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+  }
+  // prototipteki hazır iş paketleri: [ad, V-döngüsü adımı, başlangıç ve bitiş (proje süresinin oranı)]
+  var STD_WPS = [
+    ['Sistem mimarisi ve gereksinimler', 'sysreq', 0, .22],
+    ['3B paketleme ve yerleşim', 'sysdes', .1, .5],
+    ['1B / CFD termal simülasyon', 'sysdes', .14, .54],
+    ['Komponent tasarımı ve çizimler', 'compdes', .28, .62],
+    ['DFMEA ve tasarım doğrulama', 'comptest', .38, .68],
+    ['Prototip desteği ve test', 'sysint', .55, .86]
+  ];
+  function addStdWps(pid) {
+    var p0 = plan(pid), r = range(p0), s0 = mIdx(r[0]), len = Math.max(6, mIdx(r[1]) - s0 + 1);
+    function ym(n) { n = Math.round(n); return Math.floor(n / 12) + '-' + String(n % 12 + 1).padStart(2, '0'); }
+    var added = 0;
+    patch(pid, function (p) {
+      var have = {}; p.wps.forEach(function (w) { have[String(w.name || '').toLocaleLowerCase('tr')] = 1; });
+      var nums = p.wps.map(function (w) { var m = /^WP(\d+)$/i.exec(w.code || ''); return m ? +m[1] : 0; }), n = Math.max.apply(null, [0].concat(nums));
+      STD_WPS.forEach(function (x) {
+        if (have[x[0].toLocaleLowerCase('tr')]) return;
+        n++; added++;
+        p.wps.push({ id: uid(), code: 'WP' + n, name: x[0], owner: '', start: ym(s0 + x[2] * len), end: ym(s0 + Math.max(x[2] * len + 1, x[3] * len - 1)), pct: 0, v: x[1] });
+      });
+    }, { render: true });
+    toast(added ? added + ' hazır iş paketi eklendi' : 'Hazır iş paketlerinin hepsi zaten ekli');
+    if (UI.modal) renderModal();
   }
   var STD_PHASES = [['Konsept', '#797979'], ['Ön tasarım', '#0087A0'], ['Detay tasarım', '#B9052D'], ['Prototip ve test', '#E67319'], ['Seri öncesi / PPAP', '#2E8B57']];
   function addTemplate(pid, ty) {
@@ -756,6 +781,7 @@
     if (act === 'modal') { openModal(pid, a.getAttribute('data-m')); return; }
     if (act === 'closem') { closeModal(); return; }
     if (act === 'addm') { var M = MODALS[UI.modal.m]; patch(pid, function (p) { p[M.list].push(M.add(p)); }); renderModal(); var rows = modalEl().querySelectorAll('tbody tr'); var last = rows[rows.length - 1]; var f = last && last.querySelector('input:not([type=checkbox])'); if (f) f.focus(); return; }
+    if (act === 'wpsStd') { if (canEdit(pid)) addStdWps(pid); return; }
     if (act === 'phasesStd') {
       var p0 = plan(pid), r = range(p0), s0 = mIdx(r[0]), len = Math.max(5, mIdx(r[1]) - s0), stp = len / 5;
       function ym(n) { n = Math.round(n); return Math.floor(n / 12) + '-' + String(n % 12 + 1).padStart(2, '0'); }
