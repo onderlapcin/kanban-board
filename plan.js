@@ -67,7 +67,7 @@
 
   function norm(d, pid) {
     d = d || {};
-    var o = { projectId: pid, info: d.info || {}, roles: d.roles || {}, systems: d.systems || [], wps: d.wps || [], phases: d.phases || [], milestones: d.milestones || [], vcycle: d.vcycle || {}, components: d.components || [], pages: d.pages || [] };
+    var o = { projectId: pid, infoU: d.infoU || 0, infoUb: d.infoUb || '', vcU: d.vcU || 0, vcUb: d.vcUb || '', info: d.info || {}, roles: d.roles || {}, systems: d.systems || [], wps: d.wps || [], phases: d.phases || [], milestones: d.milestones || [], vcycle: d.vcycle || {}, components: d.components || [], pages: d.pages || [] };
     o.wps.forEach(function (w) { if (isYM(w.start)) w.start = w.start + '-01'; if (isYM(w.end)) w.end = lastOfMonth(w.end); if (w.start && w.end && w.end < w.start) w.end = addDays(w.start, 6); });
     o.phases.forEach(function (x) { if (isYM(x.start)) x.start = x.start + '-01'; if (isYM(x.end)) x.end = addDays(x.end + '-01', -1); if (x.start && x.end && x.end < x.start) x.end = lastOfMonth(x.start.slice(0, 7)); });
     o.components.forEach(function (k) { k.reqs = k.reqs || []; k.rules = k.rules || []; k.clear = k.clear || []; k.std = k.std || []; });
@@ -118,16 +118,33 @@
     m[k] = ts; try { var c = {}; Object.keys(m).forEach(function (x) { if (x !== '__me') c[x] = m[x]; }); localStorage.setItem('kb-pseen-' + st().me, JSON.stringify(c)); } catch (e) {}
     return true;
   }
+  // öğe bazında "gördüm" (görev panosundaki gibi: öğe açılınca ya da Gördüm'e basılınca işaret kalkar)
+  function itemSeen(pid, key) { var m = loadSeen(); return m[pid + '|i|' + key] || 0; }
+  function markItem(pid, key) { if (setSeen(pid, 'i|' + key, Date.now())) { rerenderApp(); refresh(true); } }
+  // değişiklik bilgisi: başkası değiştirdiyse ve henüz görülmediyse {renk, baş harf, ad}
+  function chgInfo(pid, page, u, ub, key) {
+    var me = st().me; if (!me || !ub || ub === me || !u) return null;
+    if (u <= Math.max(seenAt(pid, page), key ? itemSeen(pid, key) : 0)) return null;
+    var pp = person(ub), c = COLORS[((pp && pp.color) || 0) % COLORS.length];
+    return { bg: c[0], fg: c[1], ini: ini(pname(ub) || '?'), name: pname(ub) || 'Bir ekip üyesi', at: u };
+  }
+  function chgOf(pid, page, it) { return it ? chgInfo(pid, page, it.u, it.ub, it.id) : null; }
+  function chgAttr(ci, cls) { return ci ? ' class="' + (cls || '') + ' pl-chg" style="--cc:' + ci.bg + '"' : (cls ? ' class="' + cls + '"' : ''); }
+  function chgAv(ci, inl) { if (!ci) return ''; var d = new Date(ci.at); return '<span class="pl-chgav' + (inl ? ' inl' : '') + '" style="background:' + ci.bg + ';color:' + ci.fg + '" title="' + esc(ci.name + ' değiştirdi · ' + d.toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '">' + esc(ci.ini) + '</span>'; }
   function chgFor(pid, pg) {
     var p = plan(pid), me = st().me; if (!me) return 0;
     if (pg.type === 'board') { var a = app(); if (!a || !a.hlOf) return 0; return tasksOf(pid).reduce(function (n, t) { try { return n + (a.hlOf(t) ? 1 : 0); } catch (e) { return n; } }, 0); }
-    var since = seenAt(pid, pg.id), n = 0;
-    function cnt(list) { (list || []).forEach(function (x) { if (x.ub && x.ub !== me && x.u > since) n++; }); }
-    if (pg.type === 'overview') { cnt(p.systems); cnt(p.wps); if (p.infoUb && p.infoUb !== me && p.infoU > since) n++; }
-    else if (pg.type === 'timeline') { cnt(p.phases); cnt(p.milestones); cnt(p.wps); if (p.vcUb && p.vcUb !== me && p.vcU > since) n++; }
+    var n = 0;
+    function cnt(list) { (list || []).forEach(function (x) { if (chgOf(pid, pg.id, x)) n++; }); }
+    if (pg.type === 'overview') { cnt(p.systems); cnt(p.wps); if (chgInfo(pid, pg.id, p.infoU, p.infoUb, 'info')) n++; }
+    else if (pg.type === 'timeline') { cnt(p.phases); cnt(p.milestones); cnt(p.wps); if (chgInfo(pid, pg.id, p.vcU, p.vcUb, 'vc')) n++; }
     else if (pg.type === 'guide') cnt(p.components);
     else if (pg.type === 'note') cnt([pg]);
     return n;
+  }
+  function chgBar(pid, pg) {
+    var n = chgFor(pid, pg); if (!n) return '';
+    return '<div class="pl-chgbar"><b>' + n + ' görmediğin değişiklik</b><span>Başkalarının değiştirdikleri, değiştiren kişinin renginde çerçeveyle işaretli.</span><button type="button" class="pl-btn sm" data-pa="seenpage" data-id="' + esc(pg.id) + '">Gördüm</button></div>';
   }
   function chgTotal(pid) { return pagesOf(pid).reduce(function (n, pg) { return n + (pg.type === 'board' ? 0 : chgFor(pid, pg)); }, 0); }
   function markSeen(pids) {
@@ -181,7 +198,7 @@
   function navFor(pid) {
     var cur = getSub(pid);
     return pagesOf(pid).map(function (pg) {
-      var on = pg.id === cur, n = on && pg.type !== 'board' ? 0 : chgFor(pid, pg);
+      var on = pg.id === cur, n = chgFor(pid, pg);
       return { chg: n, hasChg: n > 0, chgTitle: n + ' görmediğin değişiklik', id: pg.id, pid: pid, drag: canEdit(pid) ? 'true' : 'false', label: pageLabel(pg), icon: PAGE[pg.type].icon, bg: on ? 'var(--surface-page)' : 'transparent',
         border: on ? 'var(--border-default)' : 'transparent', color: on ? 'var(--text-accent)' : 'var(--text-secondary)', weight: on ? 600 : 400,
         title: canEdit(pid) ? 'Çift tıkla: yeniden adlandır · Sürükle: sırala' : '', onClick: function () { setSub(pid, pg.id); } };
@@ -270,10 +287,11 @@
   /* ---------- Genel bakış ---------- */
   function pageOverview(pid) {
     var p = plan(pid), s = stats(pid), I = p.info, E = canEdit(pid);
-    var h = '<div class="pl-in">';
+    var h = '<div class="pl-in">' + chgBar(pid, { id: 'overview', type: 'overview' });
+    var ciInfo = chgInfo(pid, 'overview', p.infoU, p.infoUb, 'info');
     var meta = [['Segment', I.segment], ['Araç', I.vehicle], ['Müşteri', I.customer], ['Güncel faz', I.phase], ['SOP', I.sop ? fmtM(I.sop) : '']].filter(function (x) { return x[1]; });
     if (meta.length || I.summary) {
-      h += '<div class="pl-intro">' + (I.summary ? '<div class="pl-sum">' + clean(I.summaryHtml != null ? I.summaryHtml : esc(I.summary).replace(/\n/g, '<br>')) + '</div>' : '') + '<div class="pl-meta">' + meta.map(function (x) { return '<span>' + x[0] + ': <b>' + esc(x[1]) + '</b></span>'; }).join('') + (E ? '<button type="button" class="pl-link" data-pa="modal" data-m="info">Bilgileri düzenle</button>' : '') + '</div></div>';
+      h += '<div' + chgAttr(ciInfo, 'pl-intro') + '>' + chgAv(ciInfo) + (I.summary ? '<div class="pl-sum">' + clean(I.summaryHtml != null ? I.summaryHtml : esc(I.summary).replace(/\n/g, '<br>')) + '</div>' : '') + '<div class="pl-meta">' + meta.map(function (x) { return '<span>' + x[0] + ': <b>' + esc(x[1]) + '</b></span>'; }).join('') + (E ? '<button type="button" class="pl-link" data-pa="modal" data-m="info">Bilgileri düzenle</button>' : '') + '</div></div>';
     } else if (E) {
       h += '<div class="pl-empty"><b>Proje bilgileri henüz girilmedi.</b><span>Araç, müşteri, segment, güncel faz ve SOP tarihini ekleyerek başla.</span><button type="button" class="pl-btn pri" data-pa="modal" data-m="info">Proje bilgilerini ekle</button></div>';
     }
@@ -326,13 +344,15 @@
     }).join('') : '<div class="pl-muted">Ekip yok.</div>') + '</div></div>';
     h += '<div class="pl-box">' + secT('Kapsamımız: iş paketleri', editBtn('wps', p.wps.length ? 'Düzenle' : '+ Ekle', pid)) + (p.wps.length ? '<div class="pl-list">' + p.wps.map(function (w) {
       var nt = tasksOf(pid).filter(function (t) { return t.wp === w.id && t.status !== doneId(pid); }).length;
-      return '<div class="pl-it"><span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="pl-t"><b>' + esc(w.name || '') + '</b><small>' + (w.start ? fmtR(w.start, w.end) + ' · ' : '') + esc(pname(w.owner)) + (nt ? ' · ' + nt + ' açık görev' : '') + '</small><span class="pl-bar"><span style="width:' + (+w.pct || 0) + '%"></span></span></span><b class="sm nowrap">%' + (+w.pct || 0) + '</b></div>';
+      var ci = chgOf(pid, 'overview', w);
+      return '<div' + chgAttr(ci, 'pl-it') + '>' + chgAv(ci) + '<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="pl-t"><b>' + esc(w.name || '') + '</b><small>' + (w.start ? fmtR(w.start, w.end) + ' · ' : '') + esc(pname(w.owner)) + (nt ? ' · ' + nt + ' açık görev' : '') + '</small><span class="pl-bar"><span style="width:' + (+w.pct || 0) + '%"></span></span></span><b class="sm nowrap">%' + (+w.pct || 0) + '</b></div>';
     }).join('') + '</div>' : '<div class="pl-muted">Projede yapmakla görevli olduğumuz işleri (iş paketleri) ekle.</div>' + (E ? '<div class="pl-row g8"><button type="button" class="pl-btn sm" data-pa="wpsStd">Hazır iş paketlerini ekle</button><span class="pl-muted sm">Mimari, paketleme, simülasyon, komponent tasarımı, DFMEA, prototip/test</span></div>' : '')) + '</div></div>';
     // sistemler
     h += '<div class="pl-box">' + secT('Sistemler', editBtn('systems', p.systems.length ? 'Düzenle' : '+ Ekle', pid)) + (p.systems.length ? '<div class="pl-scroll"><table class="pl-tbl"><thead><tr><th>Sistem</th><th>Sorumlu</th><th class="num">Komponent</th><th class="num">Açık görev</th><th>Tasarım durumu</th></tr></thead><tbody>' + p.systems.map(function (sy) {
       var ks = p.components.filter(function (k) { return k.sys === sy.id; });
       var ot = tasksOf(pid).filter(function (t) { return t.sys === sy.id && t.status !== doneId(pid); }).length;
-      return '<tr><td><b class="fw5">' + esc(sy.name || '') + '</b></td><td><span class="pl-row g8">' + avatar(sy.owner, 22) + '<span class="sm">' + esc(pname(sy.owner)) + '</span></span></td><td class="num">' + ks.length + '</td><td class="num">' + ot + '</td><td>' + (ks.length ? ks.map(function (k) { return pill(DSTAT[k.status || 'draft']); }).join(' ') : '<span class="pl-muted sm">—</span>') + '</td></tr>';
+      var ci = chgOf(pid, 'overview', sy);
+      return '<tr' + chgAttr(ci) + '><td><span class="pl-row g8">' + chgAv(ci, true) + '<b class="fw5">' + esc(sy.name || '') + '</b></span></td><td><span class="pl-row g8">' + avatar(sy.owner, 22) + '<span class="sm">' + esc(pname(sy.owner)) + '</span></span></td><td class="num">' + ks.length + '</td><td class="num">' + ot + '</td><td>' + (ks.length ? ks.map(function (k) { return pill(DSTAT[k.status || 'draft']); }).join(' ') : '<span class="pl-muted sm">—</span>') + '</td></tr>';
     }).join('') + '</tbody></table></div>' : '<div class="pl-muted">Projede üzerinde çalıştığımız sistemleri ekle (ör. batarya termal yönetimi, HVAC).</div>') + '</div>';
     return h + '</div>';
   }
@@ -343,7 +363,7 @@
   /* ---------- Zaman çizelgesi ---------- */
   function pageTimeline(pid) {
     var p = plan(pid), E = canEdit(pid);
-    var h = '<div class="pl-in wide"><div class="pl-tools"><div class="pl-seg"><button type="button" data-pa="tl" data-v="gantt" class="' + (UI.tl === 'gantt' ? 'on' : '') + '">Gantt</button><button type="button" data-pa="tl" data-v="v" class="' + (UI.tl === 'v' ? 'on' : '') + '">V-döngüsü</button></div>' +
+    var h = '<div class="pl-in wide">' + chgBar(pid, { id: 'timeline', type: 'timeline' }) + '<div class="pl-tools"><div class="pl-seg"><button type="button" data-pa="tl" data-v="gantt" class="' + (UI.tl === 'gantt' ? 'on' : '') + '">Gantt</button><button type="button" data-pa="tl" data-v="v" class="' + (UI.tl === 'v' ? 'on' : '') + '">V-döngüsü</button></div>' +
       (UI.tl === 'gantt' ? '<div class="pl-seg"><button type="button" data-pa="zoom" data-v="month" class="' + (UI.zoom === 'month' ? 'on' : '') + '">Ay</button><button type="button" data-pa="zoom" data-v="quarter" class="' + (UI.zoom === 'quarter' ? 'on' : '') + '">Çeyrek</button></div>' : '') +
       '<span class="pl-sp"></span>' + (E ? (UI.tl === 'gantt' && (p.phases.length > 1 || p.wps.length > 1) ? '<button type="button" class="pl-btn sm" data-pa="sortall" title="Fazları ve iş paketlerini başlangıç tarihine göre sıralar">Başlangıca göre sırala</button>' : '') + '<button type="button" class="pl-btn sm" data-pa="modal" data-m="phases">Fazlar</button><button type="button" class="pl-btn sm" data-pa="modal" data-m="wps">İş paketleri</button><button type="button" class="pl-btn sm" data-pa="modal" data-m="milestones">Kilometre taşları</button>' : '') + '</div>';
     if (UI.tl === 'gantt') {
@@ -398,22 +418,23 @@
     var T = todayStr(), tx = xd(T), showT = tx >= 0 && tx <= W;
     var today = showT ? '<div class="g-today" style="left:' + P(tx) + '"></div>' : '';
     var DR = canEdit(pid);
-    function row(lab, cls, inner, dk, id, grp) { return '<div class="g-lab ' + cls + '"' + (dk ? ' data-gk="' + dk + '" data-gid="' + esc(id) + '" data-grp="' + esc(grp || '') + '"' + (DR ? ' draggable="true" title="Çift tıkla: adı düzenle · Sürükle: sırala"' : '') : (grp != null ? ' data-gk="grp" data-grp="' + esc(grp) + '"' : '')) + '>' + (dk && DR ? '<span class="g-grip" aria-hidden="true">⋮⋮</span>' : '') + lab + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + wlayer + today + inner + '</div>'; }
+    function row(lab, cls, inner, dk, id, grp, ci) { return '<div class="g-lab ' + cls + (ci ? ' pl-chg' : '') + '"' + (ci ? ' style="--cc:' + ci.bg + '"' : '') + '' + (dk ? ' data-gk="' + dk + '" data-gid="' + esc(id) + '" data-grp="' + esc(grp || '') + '"' + (DR ? ' draggable="true" title="Çift tıkla: adı düzenle · Sürükle: sırala"' : '') : (grp != null ? ' data-gk="grp" data-grp="' + esc(grp) + '"' : '')) + '>' + (dk && DR ? '<span class="g-grip" aria-hidden="true">⋮⋮</span>' : '') + lab + chgAv(ci, true) + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + wlayer + today + inner + '</div>'; }
     function bar(w, color) {
       if (!w.start) return '';
       var a = xd(w.start), b = xd(addDays(w.end || w.start, 1));
       return '<div class="g-bar' + (DR ? ' g-ed' : '') + '" data-bk="wp" data-bid="' + esc(w.id) + '" data-s="' + esc(w.start) + '" data-e="' + esc(w.end || w.start) + '" title="' + esc((w.code ? w.code + ' · ' : '') + (w.name || '') + ' · %' + (+w.pct || 0) + ' · ' + fmtR(w.start, w.end) + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır (günlük) · Çift tıkla: adı düzenle' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + color + '"><span class="fill" style="width:' + (+w.pct || 0) + '%"></span><span class="tx">' + (b - a > 110 ? esc(pname(w.owner)) : '') + '</span>' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>';
     }
-    function wpRow(w, color, grp) { return row('<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="g-nm">' + esc(w.name || '') + '</span><small>%' + (+w.pct || 0) + '</small>', 'wp', bar(w, color), 'wp', w.id, grp); }
+    function wpRow(w, color, grp) { return row('<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="g-nm">' + esc(w.name || '') + '</span><small>%' + (+w.pct || 0) + '</small>', 'wp', bar(w, color), 'wp', w.id, grp, chgOf(pid, 'timeline', w)); }
     var glw = 0; try { glw = +localStorage.getItem('kb-glw') || 0; } catch (x) {}
     var h = '<div class="gantt"' + (glw ? ' style="--glw:' + glw + 'px"' : '') + '><div class="g-wrap"><div class="g-tbl" data-gs="' + gs + '" data-ge="' + ge + '" style="grid-template-columns:max-content minmax(' + W + 'px,1fr)">';
     h += '<div class="g-lab g-head' + (weeks ? ' wk' : '') + '">Faz / iş paketi<span class="g-colrs" title="Sürükleyerek sütun genişliğini ayarla" aria-hidden="true"></span></div><div class="g-tl g-head' + (weeks ? ' wk' : '') + '"><div class="g-months">' + months + '</div>' + (weeks ? '<div class="g-weeks">' + weeks + '</div>' : '') + (showT ? '<div class="g-today-l" style="left:' + P(tx) + '">BUGÜN</div>' : '') + '</div>';
-    if (p.milestones.length) h += row('Kilometre taşları', 'ph', p.milestones.filter(function (m) { return m.date; }).map(function (m) { var xx = xd(m.date); return '<span class="g-ms" title="' + esc((m.code ? m.code + ' · ' : '') + (m.name || '') + ' · ' + fmtD(m.date)) + '" style="left:' + P(xx) + ';background:' + (m.done ? '#2E8B57' : 'var(--surface-page)') + '"></span><span class="g-ms-l" style="left:calc(' + P(xx) + ' + 12px)">' + esc(m.code || m.name || '') + '</span>'; }).join(''));
+    var msCi = null; p.milestones.forEach(function (m) { var c = chgOf(pid, 'timeline', m); if (c && (!msCi || c.at > msCi.at)) msCi = c; });
+    if (p.milestones.length) h += row('Kilometre taşları', 'ph', p.milestones.filter(function (m) { return m.date; }).map(function (m) { var xx = xd(m.date); return '<span class="g-ms" title="' + esc((m.code ? m.code + ' · ' : '') + (m.name || '') + ' · ' + fmtD(m.date)) + '" style="left:' + P(xx) + ';background:' + (m.done ? '#2E8B57' : 'var(--surface-page)') + '"></span><span class="g-ms-l" style="left:calc(' + P(xx) + ' + 12px)">' + esc(m.code || m.name || '') + '</span>'; }).join(''), null, null, null, msCi);
     var used = {};
     p.phases.forEach(function (ph) {
       var c = ph.color || '#797979';
       var a = ph.start ? xd(ph.start) : 0, b = ph.end ? xd(addDays(ph.end, 1)) : a;
-      h += row('<span class="pl-sw" style="background:' + c + '"></span><span class="g-nm">' + esc(ph.name || '') + '</span><small>' + (ph.start ? fmtR(ph.start, ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase' + (DR ? ' g-ed' : '') + '" data-bk="phase" data-bid="' + esc(ph.id) + '" data-s="' + esc(ph.start) + '" data-e="' + esc(ph.end || ph.start) + '" title="' + esc((ph.name || '') + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır (günlük) · Çift tıkla: adı düzenle' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + c + '">' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>' : '', 'phase', ph.id, ph.id);
+      h += row('<span class="pl-sw" style="background:' + c + '"></span><span class="g-nm">' + esc(ph.name || '') + '</span><small>' + (ph.start ? fmtR(ph.start, ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase' + (DR ? ' g-ed' : '') + '" data-bk="phase" data-bid="' + esc(ph.id) + '" data-s="' + esc(ph.start) + '" data-e="' + esc(ph.end || ph.start) + '" title="' + esc((ph.name || '') + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır (günlük) · Çift tıkla: adı düzenle' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + c + '">' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>' : '', 'phase', ph.id, ph.id, chgOf(pid, 'timeline', ph));
       p.wps.forEach(function (w) {
         if (used[w.id]) return;
         var manual = w.phase && p.phases.some(function (x) { return x.id === w.phase; });
@@ -471,7 +492,7 @@
     var comps = p.components;
     var selId = UI.dg[pid];
     if (!selId || !p.components.some(function (k) { return k.id === selId; })) selId = UI.dg[pid] = (comps[0] || p.components[0] || {}).id;
-    var h = '<div class="pl-in">' + (E ? '<div class="pl-tools"><span class="pl-sp"></span><button type="button" class="pl-btn sm" data-pa="modal" data-m="systems">Sistemler</button><button type="button" class="pl-btn sm pri" data-pa="addcomp">+ Komponent kartı</button></div>' : '');
+    var h = '<div class="pl-in">' + chgBar(pid, { id: 'guide', type: 'guide' }) + (E ? '<div class="pl-tools"><span class="pl-sp"></span><button type="button" class="pl-btn sm" data-pa="modal" data-m="systems">Sistemler</button><button type="button" class="pl-btn sm pri" data-pa="addcomp">+ Komponent kartı</button></div>' : '');
     if (!p.components.length) {
       h += '<div class="pl-empty"><b>Sistem Tasarımı sayfası boş.</b><span>' + (p.systems.length ? 'Her komponent için gereksinimleri, tasarım kurallarını, clearance değerlerini ve standartları tek kartta topla.' : 'Önce projedeki sistemleri ekle, sonra her sistemin komponentleri için kart oluştur.') + '</span>' + (E ? (p.systems.length ? '<button type="button" class="pl-btn pri" data-pa="addcomp">İlk komponent kartını ekle</button>' : '<button type="button" class="pl-btn pri" data-pa="modal" data-m="systems">Sistem ekle</button>') : '') + '</div></div>';
       return h;
@@ -480,12 +501,13 @@
     var groups = p.systems.map(function (sy) { return { sys: sy.id, name: sy.name || 'Adsız sistem', ks: comps.filter(function (k) { return k.sys === sy.id; }) }; });
     var orphan = comps.filter(function (k) { return !p.systems.some(function (sy) { return sy.id === k.sys; }); });
     if (orphan.length) groups.push({ name: 'Sistem atanmamış', ks: orphan });
-    groups.forEach(function (g) { h += '<div class="pl-dgg"><div class="pl-dgs">' + esc(g.name) + '</div>' + (!g.ks.length ? (E && g.sys ? '<button type="button" class="pl-dgadd" data-pa="addcomp" data-sys="' + esc(g.sys) + '">+ Kart ekle</button>' : '<div class="pl-dgnone">Henüz kart yok</div>') : '') + g.ks.map(function (k) { return '<button type="button" class="' + (k.id === selId ? 'on' : '') + '" data-pa="dg" data-id="' + esc(k.id) + '"><span>' + esc(k.name || 'Adsız komponent') + '</span>' + pill(DSTAT[k.status || 'draft']) + (k.ub && k.ub !== st().me && k.u > seenAt(pid, 'guide', true) ? '<span class="pl-new" title="Görmediğin değişiklik"></span>' : '') + '</button>'; }).join('') + '</div>'; });
+    groups.forEach(function (g) { h += '<div class="pl-dgg"><div class="pl-dgs">' + esc(g.name) + '</div>' + (!g.ks.length ? (E && g.sys ? '<button type="button" class="pl-dgadd" data-pa="addcomp" data-sys="' + esc(g.sys) + '">+ Kart ekle</button>' : '<div class="pl-dgnone">Henüz kart yok</div>') : '') + g.ks.map(function (k) { var ci = chgOf(pid, 'guide', k); return '<button type="button" class="' + (k.id === selId ? 'on' : '') + (ci ? ' pl-chg' : '') + '"' + (ci ? ' style="--cc:' + ci.bg + '"' : '') + ' data-pa="dg" data-id="' + esc(k.id) + '"><span>' + esc(k.name || 'Adsız komponent') + '</span>' + chgAv(ci, true) + pill(DSTAT[k.status || 'draft']) + '</button>'; }).join('') + '</div>'; });
     h += '</div>';
     var ki = p.components.findIndex(function (k) { return k.id === selId; }), k = p.components[ki];
     if (k) {
       var B = 'components.' + ki + '.', D = ro(pid);
-      h += '<div class="pl-box pl-comp">';
+      var kci = chgOf(pid, 'guide', k);
+      h += '<div class="pl-box pl-comp' + (kci ? ' pl-chg' : '') + '"' + (kci ? ' style="--cc:' + kci.bg + '"' : '') + '>' + chgAv(kci);
       h += '<input class="pl-ttl" data-b="' + B + 'name" value="' + esc(k.name || '') + '" placeholder="Komponent adı"' + D + '>';
       h += '<div class="pl-props">' +
         '<label>Sistem' + sel(B + 'sys', k.sys, [['', '—']].concat(p.systems.map(function (s) { return [s.id, s.name || 'Adsız sistem']; })), D) + '</label>' +
@@ -562,8 +584,8 @@
   function pageNote(pid, pgId) {
     var p = plan(pid), i = p.pages.findIndex(function (x) { return x.id === pgId; }), pg = p.pages[i], E = canEdit(pid);
     if (!pg) return '<div class="pl-in"><div class="pl-muted">Sayfa bulunamadı.</div></div>';
-    var B = 'pages.' + i + '.';
-    return '<div class="pl-in note"><input class="pl-ttl big" data-b="' + B + 'title" data-nav="1" value="' + esc(pg.title || '') + '" placeholder="Başlıksız Sayfa"' + ro(pid) + '>' +
+    var B = 'pages.' + i + '.', nci = chgOf(pid, pg.id, pg);
+    return '<div class="pl-in note">' + (nci ? '<div class="pl-chgbar" style="--cc:' + nci.bg + '">' + chgAv(nci, true) + '<b>' + esc(nci.name) + ' bu sayfayı değiştirdi</b><span>' + esc(new Date(nci.at).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) + '</span><button type="button" class="pl-btn sm" data-pa="seenpage" data-id="' + esc(pg.id) + '">Gördüm</button></div>' : '') + '<input class="pl-ttl big" data-b="' + B + 'title" data-nav="1" value="' + esc(pg.title || '') + '" placeholder="Başlıksız Sayfa"' + ro(pid) + '>' +
       '<div class="pl-body kb-rte-ed" data-kind="plan" data-b="' + B + 'body" data-t="html" contenteditable="' + (E ? 'true' : 'false') + '" data-ph="Yazmaya başla… Biçimlendirmek, başlık ya da liste yapmak için metni seç.">' + clean(pg.body || '') + '</div></div>';
   }
 
@@ -601,7 +623,7 @@
   function sigFor(pid, sub) {
     var ts = tasksOf(pid).map(function (t) { return [t.id, t.title, t.status, t.due, t.assignees, t.sys, t.wp]; });
     var pr = proj(pid);
-    return JSON.stringify([pid, sub, plan(pid), ts, pr && pr.members, pr && pr.statuses, (st().people || []).map(function (p) { return [p.id, p.name, p.color, p.email]; }), UI.tl, UI.zoom, UI.vSel, UI.dg[pid], UI.dgQ, canEdit(pid), todayStr()]);
+    return JSON.stringify([pid, sub, chgFor(pid, pagesOf(pid).find(function (x) { return x.id === sub; }) || { id: sub, type: sub }), plan(pid), ts, pr && pr.members, pr && pr.statuses, (st().people || []).map(function (p) { return [p.id, p.name, p.color, p.email]; }), UI.tl, UI.zoom, UI.vSel, UI.dg[pid], UI.dgQ, canEdit(pid), todayStr()]);
   }
   function editingIn(el) {
     var a = document.activeElement;
@@ -616,8 +638,7 @@
     var gw = host.querySelector('.g-wrap'), gl = gw ? gw.scrollLeft : null, sameView = host.__view === pid + '|' + sub;
     var wasSeen = seenAt(pid, sub);
     host.innerHTML = htmlFor(pid, sub);
-    host.__seenT && clearTimeout(host.__seenT);
-    host.__seenT = setTimeout(function () { if (host.isConnected && host.getAttribute('data-sub') === sub && setSeen(pid, sub, Date.now())) rerenderApp(); }, 1500);
+
     host.__sig = sig; host.__dirty = false;
     if (!sameView) { host.scrollTop = 0; host.__view = pid + '|' + sub; }
     fixColMin(host);
@@ -846,7 +867,8 @@
     if (act === 'tl') { UI.tl = a.getAttribute('data-v'); refresh(true); return; }
     if (act === 'zoom') { UI.zoom = a.getAttribute('data-v'); refresh(true); return; }
     if (act === 'v') { var id = a.getAttribute('data-id'); UI.vSel = UI.vSel === id ? null : id; refresh(true); return; }
-    if (act === 'dg') { UI.dg[pid] = a.getAttribute('data-id'); refresh(true); return; }
+    if (act === 'dg') { var did0 = a.getAttribute('data-id'); UI.dg[pid] = did0; var k0 = plan(pid).components.find(function (c) { return c.id === did0; }); if (k0 && chgOf(pid, 'guide', k0)) markItem(pid, did0); else refresh(true); return; }
+    if (act === 'seenpage') { if (setSeen(pid, a.getAttribute('data-id'), Date.now())) { rerenderApp(); refresh(true); } return; }
     if (act === 'addcomp') {
       var p1 = plan(pid); if (!p1.systems.length) { openModal(pid, 'systems'); return; }
       var cid = uid(), curSel = p1.components.find(function (k) { return k.id === UI.dg[pid]; });
@@ -1345,6 +1367,10 @@
     '.pl-dg{display:grid;grid-template-columns:290px minmax(0,1fr);gap:20px;align-items:start}' +
     '.pl-dgl{display:flex;flex-direction:column;gap:12px;position:sticky;top:0}.pl-dgg{border:1px solid var(--border-default);border-radius:6px;overflow:hidden}.pl-dgg>:last-child{border-bottom:0!important}.pl-new{width:8px;height:8px;border-radius:50%;background:#B9052D;flex-shrink:0}.pl-dgs{padding:10px 14px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);background:var(--surface-subtle);border-bottom:1px solid var(--border-default)}' +
     '.pl-dgl button{display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid var(--surface-subtle);background:var(--surface-page);text-align:left;padding:10px 14px;cursor:pointer;font-size:13px}.pl-dgl button>span:first-child{flex:1;min-width:0}.pl-dgl button:hover{background:var(--surface-subtle)}.pl-dgl button.on{background:rgba(185,5,45,.08);color:var(--text-accent);font-weight:600}' +
+    '.pl-chg{position:relative;box-shadow:inset 0 0 0 2px var(--cc)!important;border-radius:6px}.pl-box.pl-chg,.pl-intro.pl-chg{box-shadow:0 0 0 2px var(--cc)!important}.pl-intro.pl-chg{padding:12px 14px}tr.pl-chg{outline:2px solid var(--cc);outline-offset:-2px;box-shadow:none!important}' +
+    '.pl-chgav{position:absolute;top:-9px;right:-9px;z-index:3;min-width:20px;height:20px;padding:0 4px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:1;box-shadow:0 0 0 2px var(--surface-page);box-sizing:border-box}.pl-chgav.inl{position:static;flex-shrink:0;box-shadow:none}' +
+    '.pl-it.pl-chg{padding-left:10px;padding-right:10px}.g-lab.pl-chg .pl-chgav.inl{margin-left:4px}' +
+    '.pl-chgbar{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:10px 14px;border-radius:6px;background:var(--surface-subtle);font-size:13px}.pl-chgbar b{color:var(--text-accent)}.pl-chgbar span{color:var(--text-muted);font-size:12px;flex:1;min-width:180px}' +
     '.pl-dgl button.pl-dgadd{color:var(--text-muted);font-size:12px;font-weight:600}.pl-dgl button.pl-dgadd:hover{color:var(--text-accent)}.pl-dgnone{padding:10px 14px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--surface-subtle)}' +
     '.pl-comp{gap:16px}.pl-ttl{font-size:22px;font-weight:600;border:1px solid transparent;border-radius:5px;padding:4px 6px;margin-left:-7px;outline:none;background:transparent;width:100%}.pl-ttl:hover{border-color:var(--border-default)}.pl-ttl:focus{border-color:#B9052D}.pl-ttl.big{font-size:30px;margin-left:-7px}' +
     '.pl-props,.pl-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 14px}.pl-props label,.pl-form label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;letter-spacing:.05em;color:var(--text-muted);text-transform:uppercase}.pl-props label.wide,.pl-form label.wide{grid-column:1/-1}' +
@@ -1391,6 +1417,6 @@
     hasBoard: function (pid) { return hasPage(pid, 'board'); },
     chgTotal: chgTotal, markSeen: markSeen,
     sysOpts: sysOpts, wpOpts: wpOpts, chipsFor: chipsFor,
-    _plan: plan
+    _plan: plan, _chg: function (pid, id) { return chgFor(pid, pagesOf(pid).find(function (x) { return x.id === id; })); }
   };
 })();
