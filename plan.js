@@ -129,7 +129,18 @@
     return { bg: c[0], fg: c[1], ini: ini(pname(ub) || '?'), name: pname(ub) || 'Bir ekip üyesi', at: u };
   }
   function chgOf(pid, page, it) { return it ? chgInfo(pid, page, it.u, it.ub, it.id) : null; }
-  function chgAttr(ci, cls) { return ci ? ' class="' + (cls || '') + ' pl-chg" style="--cc:' + ci.bg + '"' : (cls ? ' class="' + cls + '"' : ''); }
+  // canlı: başka biri bu öğeyi şu an açmış / düzenliyor (görev panosundaki kesikli çerçeve)
+  function liveOf(key) {
+    var k = window.__kb && window.__kb.planEditorsOf ? window.__kb.planEditorsOf(key).filter(function (e) { return e.pid !== st().me; }) : [];
+    if (!k.length) return null;
+    var pp = person(k[0].pid), c = COLORS[((pp && pp.color) || 0) % COLORS.length];
+    return { bg: c[0], fg: c[1], ini: ini(pname(k[0].pid) || '?'), name: pname(k[0].pid) || 'Bir ekip üyesi', more: k.length - 1 };
+  }
+  function liveAv(li, inl) { return li ? '<span class="pl-liveav' + (inl ? ' inl' : '') + '" style="color:' + li.bg + ';border-color:' + li.bg + '" title="' + esc(li.name + ' şu an bunun üzerinde çalışıyor') + '">' + esc(li.ini) + '</span>' : ''; }
+  function chgAttr(ci, cls, li) {
+    var c = (cls || '') + (ci ? ' pl-chg' : '') + (li ? ' pl-live' : ''), st0 = (ci ? '--cc:' + ci.bg + ';' : '') + (li ? '--lc:' + li.bg + ';' : '');
+    return (c.trim() ? ' class="' + c.trim() + '"' : '') + (st0 ? ' style="' + st0 + '"' : '');
+  }
   function chgAv(ci, inl) { if (!ci) return ''; var d = new Date(ci.at); return '<span class="pl-chgav' + (inl ? ' inl' : '') + '" style="background:' + ci.bg + ';color:' + ci.fg + '" title="' + esc(ci.name + ' değiştirdi · ' + d.toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '">' + esc(ci.ini) + '</span>'; }
   function chgFor(pid, pg) {
     var p = plan(pid), me = st().me; if (!me) return 0;
@@ -288,10 +299,10 @@
   function pageOverview(pid) {
     var p = plan(pid), s = stats(pid), I = p.info, E = canEdit(pid);
     var h = '<div class="pl-in">' + chgBar(pid, { id: 'overview', type: 'overview' });
-    var ciInfo = chgInfo(pid, 'overview', p.infoU, p.infoUb, 'info');
+    var ciInfo = chgInfo(pid, 'overview', p.infoU, p.infoUb, 'info'), liInfo = liveOf(pid + ':info');
     var meta = [['Segment', I.segment], ['Araç', I.vehicle], ['Müşteri', I.customer], ['Güncel faz', I.phase], ['SOP', I.sop ? fmtM(I.sop) : '']].filter(function (x) { return x[1]; });
     if (meta.length || I.summary) {
-      h += '<div' + chgAttr(ciInfo, 'pl-intro') + '>' + chgAv(ciInfo) + (I.summary ? '<div class="pl-sum">' + clean(I.summaryHtml != null ? I.summaryHtml : esc(I.summary).replace(/\n/g, '<br>')) + '</div>' : '') + '<div class="pl-meta">' + meta.map(function (x) { return '<span>' + x[0] + ': <b>' + esc(x[1]) + '</b></span>'; }).join('') + (E ? '<button type="button" class="pl-link" data-pa="modal" data-m="info">Bilgileri düzenle</button>' : '') + '</div></div>';
+      h += '<div' + chgAttr(ciInfo, 'pl-intro', liInfo) + '>' + (ciInfo ? chgAv(ciInfo) : liveAv(liInfo)) + (I.summary ? '<div class="pl-sum">' + clean(I.summaryHtml != null ? I.summaryHtml : esc(I.summary).replace(/\n/g, '<br>')) + '</div>' : '') + '<div class="pl-meta">' + meta.map(function (x) { return '<span>' + x[0] + ': <b>' + esc(x[1]) + '</b></span>'; }).join('') + (E ? '<button type="button" class="pl-link" data-pa="modal" data-m="info">Bilgileri düzenle</button>' : '') + '</div></div>';
     } else if (E) {
       h += '<div class="pl-empty"><b>Proje bilgileri henüz girilmedi.</b><span>Araç, müşteri, segment, güncel faz ve SOP tarihini ekleyerek başla.</span><button type="button" class="pl-btn pri" data-pa="modal" data-m="info">Proje bilgilerini ekle</button></div>';
     }
@@ -344,15 +355,15 @@
     }).join('') : '<div class="pl-muted">Ekip yok.</div>') + '</div></div>';
     h += '<div class="pl-box">' + secT('Kapsamımız: iş paketleri', editBtn('wps', p.wps.length ? 'Düzenle' : '+ Ekle', pid)) + (p.wps.length ? '<div class="pl-list">' + p.wps.map(function (w) {
       var nt = tasksOf(pid).filter(function (t) { return t.wp === w.id && t.status !== doneId(pid); }).length;
-      var ci = chgOf(pid, 'overview', w);
-      return '<div' + chgAttr(ci, 'pl-it') + '>' + chgAv(ci) + '<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="pl-t"><b>' + esc(w.name || '') + '</b><small>' + (w.start ? fmtR(w.start, w.end) + ' · ' : '') + esc(pname(w.owner)) + (nt ? ' · ' + nt + ' açık görev' : '') + '</small><span class="pl-bar"><span style="width:' + (+w.pct || 0) + '%"></span></span></span><b class="sm nowrap">%' + (+w.pct || 0) + '</b></div>';
+      var ci = chgOf(pid, 'overview', w), li = liveOf(pid + ':wps:' + w.id);
+      return '<div' + chgAttr(ci, 'pl-it', li) + '>' + (ci ? chgAv(ci) : liveAv(li)) + '<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="pl-t"><b>' + esc(w.name || '') + '</b><small>' + (w.start ? fmtR(w.start, w.end) + ' · ' : '') + esc(pname(w.owner)) + (nt ? ' · ' + nt + ' açık görev' : '') + '</small><span class="pl-bar"><span style="width:' + (+w.pct || 0) + '%"></span></span></span><b class="sm nowrap">%' + (+w.pct || 0) + '</b></div>';
     }).join('') + '</div>' : '<div class="pl-muted">Projede yapmakla görevli olduğumuz işleri (iş paketleri) ekle.</div>' + (E ? '<div class="pl-row g8"><button type="button" class="pl-btn sm" data-pa="wpsStd">Hazır iş paketlerini ekle</button><span class="pl-muted sm">Mimari, paketleme, simülasyon, komponent tasarımı, DFMEA, prototip/test</span></div>' : '')) + '</div></div>';
     // sistemler
     h += '<div class="pl-box">' + secT('Sistemler', editBtn('systems', p.systems.length ? 'Düzenle' : '+ Ekle', pid)) + (p.systems.length ? '<div class="pl-scroll"><table class="pl-tbl"><thead><tr><th>Sistem</th><th>Sorumlu</th><th class="num">Komponent</th><th class="num">Açık görev</th><th>Tasarım durumu</th></tr></thead><tbody>' + p.systems.map(function (sy) {
       var ks = p.components.filter(function (k) { return k.sys === sy.id; });
       var ot = tasksOf(pid).filter(function (t) { return t.sys === sy.id && t.status !== doneId(pid); }).length;
-      var ci = chgOf(pid, 'overview', sy);
-      return '<tr' + chgAttr(ci) + '><td><span class="pl-row g8">' + chgAv(ci, true) + '<b class="fw5">' + esc(sy.name || '') + '</b></span></td><td><span class="pl-row g8">' + avatar(sy.owner, 22) + '<span class="sm">' + esc(pname(sy.owner)) + '</span></span></td><td class="num">' + ks.length + '</td><td class="num">' + ot + '</td><td>' + (ks.length ? ks.map(function (k) { return pill(DSTAT[k.status || 'draft']); }).join(' ') : '<span class="pl-muted sm">—</span>') + '</td></tr>';
+      var ci = chgOf(pid, 'overview', sy), li = liveOf(pid + ':systems:' + sy.id);
+      return '<tr' + chgAttr(ci, '', li) + '><td><span class="pl-row g8">' + chgAv(ci, true) + liveAv(li, true) + '<b class="fw5">' + esc(sy.name || '') + '</b></span></td><td><span class="pl-row g8">' + avatar(sy.owner, 22) + '<span class="sm">' + esc(pname(sy.owner)) + '</span></span></td><td class="num">' + ks.length + '</td><td class="num">' + ot + '</td><td>' + (ks.length ? ks.map(function (k) { return pill(DSTAT[k.status || 'draft']); }).join(' ') : '<span class="pl-muted sm">—</span>') + '</td></tr>';
     }).join('') + '</tbody></table></div>' : '<div class="pl-muted">Projede üzerinde çalıştığımız sistemleri ekle (ör. batarya termal yönetimi, HVAC).</div>') + '</div>';
     return h + '</div>';
   }
@@ -418,7 +429,7 @@
     var T = todayStr(), tx = xd(T), showT = tx >= 0 && tx <= W;
     var today = showT ? '<div class="g-today" style="left:' + P(tx) + '"></div>' : '';
     var DR = canEdit(pid);
-    function row(lab, cls, inner, dk, id, grp, ci) { return '<div class="g-lab ' + cls + (ci ? ' pl-chg' : '') + '"' + (ci ? ' style="--cc:' + ci.bg + '"' : '') + '' + (dk ? ' data-gk="' + dk + '" data-gid="' + esc(id) + '" data-grp="' + esc(grp || '') + '"' + (DR ? ' draggable="true" title="Çift tıkla: adı düzenle · Sürükle: sırala"' : '') : (grp != null ? ' data-gk="grp" data-grp="' + esc(grp) + '"' : '')) + '>' + (dk && DR ? '<span class="g-grip" aria-hidden="true">⋮⋮</span>' : '') + lab + chgAv(ci, true) + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + wlayer + today + inner + '</div>'; }
+    function row(lab, cls, inner, dk, id, grp, ci, li) { if (li === undefined && dk) li = liveOf(pid + ':' + (dk === 'phase' ? 'phases' : 'wps') + ':' + id); return '<div class="g-lab ' + cls + (ci ? ' pl-chg' : '') + (li ? ' pl-live' : '') + '"' + (ci || li ? ' style="' + (ci ? '--cc:' + ci.bg + ';' : '') + (li ? '--lc:' + li.bg + ';' : '') + '"' : '') + '' + (dk ? ' data-gk="' + dk + '" data-gid="' + esc(id) + '" data-grp="' + esc(grp || '') + '"' + (DR ? ' draggable="true" title="Çift tıkla: adı düzenle · Sürükle: sırala"' : '') : (grp != null ? ' data-gk="grp" data-grp="' + esc(grp) + '"' : '')) + '>' + (dk && DR ? '<span class="g-grip" aria-hidden="true">⋮⋮</span>' : '') + lab + chgAv(ci, true) + liveAv(li, true) + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + wlayer + today + inner + '</div>'; }
     function bar(w, color) {
       if (!w.start) return '';
       var a = xd(w.start), b = xd(addDays(w.end || w.start, 1));
@@ -428,8 +439,8 @@
     var glw = 0; try { glw = +localStorage.getItem('kb-glw') || 0; } catch (x) {}
     var h = '<div class="gantt"' + (glw ? ' style="--glw:' + glw + 'px"' : '') + '><div class="g-wrap"><div class="g-tbl" data-gs="' + gs + '" data-ge="' + ge + '" style="grid-template-columns:max-content minmax(' + W + 'px,1fr)">';
     h += '<div class="g-lab g-head' + (weeks ? ' wk' : '') + '">Faz / iş paketi<span class="g-colrs" title="Sürükleyerek sütun genişliğini ayarla" aria-hidden="true"></span></div><div class="g-tl g-head' + (weeks ? ' wk' : '') + '"><div class="g-months">' + months + '</div>' + (weeks ? '<div class="g-weeks">' + weeks + '</div>' : '') + (showT ? '<div class="g-today-l" style="left:' + P(tx) + '">BUGÜN</div>' : '') + '</div>';
-    var msCi = null; p.milestones.forEach(function (m) { var c = chgOf(pid, 'timeline', m); if (c && (!msCi || c.at > msCi.at)) msCi = c; });
-    if (p.milestones.length) h += row('Kilometre taşları', 'ph', p.milestones.filter(function (m) { return m.date; }).map(function (m) { var xx = xd(m.date); return '<span class="g-ms" title="' + esc((m.code ? m.code + ' · ' : '') + (m.name || '') + ' · ' + fmtD(m.date)) + '" style="left:' + P(xx) + ';background:' + (m.done ? '#2E8B57' : 'var(--surface-page)') + '"></span><span class="g-ms-l" style="left:calc(' + P(xx) + ' + 12px)">' + esc(m.code || m.name || '') + '</span>'; }).join(''), null, null, null, msCi);
+    var msCi = null, msLi = null; p.milestones.forEach(function (m) { var c = chgOf(pid, 'timeline', m); if (c && (!msCi || c.at > msCi.at)) msCi = c; msLi = msLi || liveOf(pid + ':milestones:' + m.id); });
+    if (p.milestones.length) h += row('Kilometre taşları', 'ph', p.milestones.filter(function (m) { return m.date; }).map(function (m) { var xx = xd(m.date); return '<span class="g-ms" title="' + esc((m.code ? m.code + ' · ' : '') + (m.name || '') + ' · ' + fmtD(m.date)) + '" style="left:' + P(xx) + ';background:' + (m.done ? '#2E8B57' : 'var(--surface-page)') + '"></span><span class="g-ms-l" style="left:calc(' + P(xx) + ' + 12px)">' + esc(m.code || m.name || '') + '</span>'; }).join(''), null, null, null, msCi, msLi);
     var used = {};
     p.phases.forEach(function (ph) {
       var c = ph.color || '#797979';
@@ -501,13 +512,13 @@
     var groups = p.systems.map(function (sy) { return { sys: sy.id, name: sy.name || 'Adsız sistem', ks: comps.filter(function (k) { return k.sys === sy.id; }) }; });
     var orphan = comps.filter(function (k) { return !p.systems.some(function (sy) { return sy.id === k.sys; }); });
     if (orphan.length) groups.push({ name: 'Sistem atanmamış', ks: orphan });
-    groups.forEach(function (g) { h += '<div class="pl-dgg"><div class="pl-dgs">' + esc(g.name) + '</div>' + (!g.ks.length ? (E && g.sys ? '<button type="button" class="pl-dgadd" data-pa="addcomp" data-sys="' + esc(g.sys) + '">+ Kart ekle</button>' : '<div class="pl-dgnone">Henüz kart yok</div>') : '') + g.ks.map(function (k) { var ci = chgOf(pid, 'guide', k); return '<button type="button" class="' + (k.id === selId ? 'on' : '') + (ci ? ' pl-chg' : '') + '"' + (ci ? ' style="--cc:' + ci.bg + '"' : '') + ' data-pa="dg" data-id="' + esc(k.id) + '"><span>' + esc(k.name || 'Adsız komponent') + '</span>' + chgAv(ci, true) + pill(DSTAT[k.status || 'draft']) + '</button>'; }).join('') + '</div>'; });
+    groups.forEach(function (g) { h += '<div class="pl-dgg"><div class="pl-dgs">' + esc(g.name) + '</div>' + (!g.ks.length ? (E && g.sys ? '<button type="button" class="pl-dgadd" data-pa="addcomp" data-sys="' + esc(g.sys) + '">+ Kart ekle</button>' : '<div class="pl-dgnone">Henüz kart yok</div>') : '') + g.ks.map(function (k) { var ci = chgOf(pid, 'guide', k), li = liveOf(pid + ':components:' + k.id); return '<button type="button"' + chgAttr(ci, k.id === selId ? 'on' : '', li) + ' data-pa="dg" data-id="' + esc(k.id) + '"><span>' + esc(k.name || 'Adsız komponent') + '</span>' + chgAv(ci, true) + liveAv(li, true) + pill(DSTAT[k.status || 'draft']) + '</button>'; }).join('') + '</div>'; });
     h += '</div>';
     var ki = p.components.findIndex(function (k) { return k.id === selId; }), k = p.components[ki];
     if (k) {
       var B = 'components.' + ki + '.', D = ro(pid);
-      var kci = chgOf(pid, 'guide', k);
-      h += '<div class="pl-box pl-comp' + (kci ? ' pl-chg' : '') + '"' + (kci ? ' style="--cc:' + kci.bg + '"' : '') + '>' + chgAv(kci);
+      var kci = chgOf(pid, 'guide', k), kli = liveOf(pid + ':components:' + k.id);
+      h += '<div' + chgAttr(kci, 'pl-box pl-comp', kli) + '>' + chgAv(kci) + (kli ? '<div class="pl-livebar" style="--lc:' + kli.bg + '">' + liveAv(kli, true) + '<span><b>' + esc(kli.name) + '</b>' + (kli.more ? ' ve ' + kli.more + ' kişi daha' : '') + ' şu an bu kartı açmış. Aynı alanı birlikte düzenlerseniz son kaydeden geçerli olur.</span></div>' : '');
       h += '<input class="pl-ttl" data-b="' + B + 'name" value="' + esc(k.name || '') + '" placeholder="Komponent adı"' + D + '>';
       h += '<div class="pl-props">' +
         '<label>Sistem' + sel(B + 'sys', k.sys, [['', '—']].concat(p.systems.map(function (s) { return [s.id, s.name || 'Adsız sistem']; })), D) + '</label>' +
@@ -584,8 +595,8 @@
   function pageNote(pid, pgId) {
     var p = plan(pid), i = p.pages.findIndex(function (x) { return x.id === pgId; }), pg = p.pages[i], E = canEdit(pid);
     if (!pg) return '<div class="pl-in"><div class="pl-muted">Sayfa bulunamadı.</div></div>';
-    var B = 'pages.' + i + '.', nci = chgOf(pid, pg.id, pg);
-    return '<div class="pl-in note">' + (nci ? '<div class="pl-chgbar" style="--cc:' + nci.bg + '">' + chgAv(nci, true) + '<b>' + esc(nci.name) + ' bu sayfayı değiştirdi</b><span>' + esc(new Date(nci.at).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) + '</span><button type="button" class="pl-btn sm" data-pa="seenpage" data-id="' + esc(pg.id) + '">Gördüm</button></div>' : '') + '<input class="pl-ttl big" data-b="' + B + 'title" data-nav="1" value="' + esc(pg.title || '') + '" placeholder="Başlıksız Sayfa"' + ro(pid) + '>' +
+    var B = 'pages.' + i + '.', nci = chgOf(pid, pg.id, pg), nli = liveOf(pid + ':pages:' + pg.id);
+    return '<div class="pl-in note">' + (nli ? '<div class="pl-livebar" style="--lc:' + nli.bg + '">' + liveAv(nli, true) + '<span><b>' + esc(nli.name) + '</b>' + (nli.more ? ' ve ' + nli.more + ' kişi daha' : '') + ' şu an bu sayfada. Aynı anda düzenlerseniz son kaydeden geçerli olur.</span></div>' : '') + (nci ? '<div class="pl-chgbar" style="--cc:' + nci.bg + '">' + chgAv(nci, true) + '<b>' + esc(nci.name) + ' bu sayfayı değiştirdi</b><span>' + esc(new Date(nci.at).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) + '</span><button type="button" class="pl-btn sm" data-pa="seenpage" data-id="' + esc(pg.id) + '">Gördüm</button></div>' : '') + '<input class="pl-ttl big" data-b="' + B + 'title" data-nav="1" value="' + esc(pg.title || '') + '" placeholder="Başlıksız Sayfa"' + ro(pid) + '>' +
       '<div class="pl-body kb-rte-ed" data-kind="plan" data-b="' + B + 'body" data-t="html" contenteditable="' + (E ? 'true' : 'false') + '" data-ph="Yazmaya başla… Biçimlendirmek, başlık ya da liste yapmak için metni seç.">' + clean(pg.body || '') + '</div></div>';
   }
 
@@ -623,7 +634,7 @@
   function sigFor(pid, sub) {
     var ts = tasksOf(pid).map(function (t) { return [t.id, t.title, t.status, t.due, t.assignees, t.sys, t.wp]; });
     var pr = proj(pid);
-    return JSON.stringify([pid, sub, chgFor(pid, pagesOf(pid).find(function (x) { return x.id === sub; }) || { id: sub, type: sub }), plan(pid), ts, pr && pr.members, pr && pr.statuses, (st().people || []).map(function (p) { return [p.id, p.name, p.color, p.email]; }), UI.tl, UI.zoom, UI.vSel, UI.dg[pid], UI.dgQ, canEdit(pid), todayStr()]);
+    return JSON.stringify([pid, sub, window.__kb && window.__kb.planLiveSig ? window.__kb.planLiveSig() : '', chgFor(pid, pagesOf(pid).find(function (x) { return x.id === sub; }) || { id: sub, type: sub }), plan(pid), ts, pr && pr.members, pr && pr.statuses, (st().people || []).map(function (p) { return [p.id, p.name, p.color, p.email]; }), UI.tl, UI.zoom, UI.vSel, UI.dg[pid], UI.dgQ, canEdit(pid), todayStr()]);
   }
   function editingIn(el) {
     var a = document.activeElement;
@@ -695,7 +706,8 @@
       var L = p[M.list];
       h += L.length ? '<div class="pl-scroll"><table class="pl-tbl ed"><thead><tr><th style="width:24px"></th>' + M.cols.map(function (c) { return '<th' + (c[4] ? ' style="width:' + c[4] + 'px"' : '') + '>' + esc(c[1]) + '</th>'; }).join('') + '<th style="width:36px"></th></tr></thead><tbody>' +
         L.map(function (row, i) {
-          return '<tr data-mrow="' + i + '"><td class="pl-grip" draggable="true" title="Sürükleyerek sırala" aria-label="Sürükleyerek sırala">⋮⋮</td>' + M.cols.map(function (c) {
+          var mli = liveOf(pid + ':' + M.list + ':' + row.id);
+          return '<tr data-mrow="' + i + '"' + (mli ? ' class="pl-live" style="--lc:' + mli.bg + '" title="' + esc(mli.name + ' şu an bu satırı düzenliyor') + '"' : '') + '><td class="pl-grip" draggable="true" title="Sürükleyerek sırala" aria-label="Sürükleyerek sırala">⋮⋮</td>' + M.cols.map(function (c) {
             var b = M.list + '.' + i + '.' + c[0], v = row[c[0]];
             if (c[2] === 'member') return '<td>' + sel(b, v, memberOpts(pid)) + '</td>';
             if (c[2] === 'phase') return '<td>' + sel(b, v, [['', 'Otomatik (başlangıca göre)']].concat(p.phases.map(function (x) { return [x.id, x.name || 'Adsız faz']; }))) + '</td>';
@@ -1234,13 +1246,14 @@
     e.preventDefault(); e.stopPropagation();
     var L = kind === 'phase' ? plan(pid).phases : plan(pid).wps, it = L.find(function (x) { return x.id === id; }); if (!it) return;
     var old = document.getElementById('kbpl-ren'); if (old) old.remove();
+    renKey = pid + ':' + (kind === 'phase' ? 'phases' : 'wps') + ':' + id; liveSoon();
     var r = nm.getBoundingClientRect(), lr = lab.getBoundingClientRect(), inp = document.createElement('input');
     inp.id = 'kbpl-ren'; inp.className = 'pl-ren'; inp.value = it.name || ''; inp.placeholder = kind === 'phase' ? 'Faz adı' : 'İş paketi adı'; inp.setAttribute('aria-label', inp.placeholder);
     inp.style.top = (lr.top + 4) + 'px'; inp.style.left = (r.left - 4) + 'px'; inp.style.width = Math.max(220, lr.right - r.left - 8) + 'px'; inp.style.height = (lr.height - 8) + 'px';
     document.body.appendChild(inp); inp.focus(); inp.select();
     var done = false;
     function finish(save) {
-      if (done) return; done = true; var v = inp.value.trim(); inp.remove();
+      if (done) return; done = true; var v = inp.value.trim(); inp.remove(); renKey = null; liveSoon();
       if (!save || v === (it.name || '')) return;
       patch(pid, function (p) { var LL = kind === 'phase' ? p.phases : p.wps, x = LL.find(function (y) { return y.id === id; }); if (x) x.name = v; }, { render: true });
     }
@@ -1276,6 +1289,33 @@
   }, true);
   function endCol() { if (!colrs) return; var w = colrs.w; colrs = null; document.body.classList.remove('pl-colrs'); if (w) { try { localStorage.setItem('kb-glw', String(w)); } catch (x) {} } }
   document.addEventListener('pointerup', endCol, true); document.addEventListener('pointercancel', endCol, true);
+
+  /* ---------- canlı varlık: şu an açık tuttuğum öğeyi diğerlerine bildir ---------- */
+  var renKey = null;
+  function myLiveKey() {
+    var el = document.activeElement;
+    if (UI.modal) {
+      var mp = UI.modal.pid, M = MODALS[UI.modal.m]; if (!M) return null;
+      if (M.form) return mp + ':info';
+      var tr = el && el.closest && el.closest('.pl-modal tr[data-mrow]');
+      var it = tr && plan(mp)[M.list][+tr.getAttribute('data-mrow')];
+      return it ? mp + ':' + M.list + ':' + it.id : null;
+    }
+    if (bdrag) return bdrag.pid + ':' + (bdrag.kind === 'phase' ? 'phases' : 'wps') + ':' + bdrag.id;
+    if (renKey) return renKey;
+    var host = document.querySelector('.kb-plan-host'); if (!host) return null;
+    var hp = host.getAttribute('data-pid'), sub = host.getAttribute('data-sub'), pg = pagesOf(hp).find(function (x) { return x.id === sub; });
+    if (!pg || document.hidden) return null;
+    if (pg.type === 'guide') return UI.dg[hp] ? hp + ':components:' + UI.dg[hp] : null;
+    if (pg.type === 'note') return hp + ':pages:' + pg.id;
+    if (pg.type === 'overview' && el && host.contains(el) && el.closest('[data-b^="roles."]')) return hp + ':info';
+    return null;
+  }
+  function liveSync() { try { if (window.__kb && window.__kb.setPlanEditing) window.__kb.setPlanEditing(myLiveKey()); } catch (e) {} }
+  var liveT = null; function liveSoon() { clearTimeout(liveT); liveT = setTimeout(liveSync, 50); }
+  document.addEventListener('focusin', liveSoon); document.addEventListener('focusout', liveSoon);
+  document.addEventListener('pointerup', liveSoon, true); document.addEventListener('visibilitychange', liveSoon);
+  setInterval(liveSync, 1500);
 
   /* ---------- simgeler ve stil ---------- */
   var SV = function (d) { return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; };
@@ -1370,6 +1410,9 @@
     '.pl-chg{position:relative;box-shadow:inset 0 0 0 2px var(--cc)!important;border-radius:6px}.pl-box.pl-chg,.pl-intro.pl-chg{box-shadow:0 0 0 2px var(--cc)!important}.pl-intro.pl-chg{padding:12px 14px}tr.pl-chg{outline:2px solid var(--cc);outline-offset:-2px;box-shadow:none!important}' +
     '.pl-chgav{position:absolute;top:-9px;right:-9px;z-index:3;min-width:20px;height:20px;padding:0 4px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:1;box-shadow:0 0 0 2px var(--surface-page);box-sizing:border-box}.pl-chgav.inl{position:static;flex-shrink:0;box-shadow:none}' +
     '.pl-it.pl-chg{padding-left:10px;padding-right:10px}.g-lab.pl-chg .pl-chgav.inl{margin-left:4px}' +
+    '.pl-live{outline:2px dashed var(--lc)!important;outline-offset:-2px}.pl-box.pl-live,.pl-intro.pl-live{outline-offset:2px}tr.pl-live{outline:2px dashed var(--lc)!important;outline-offset:-2px}' +
+    '.pl-liveav{position:absolute;top:-10px;left:-10px;z-index:3;min-width:20px;height:20px;padding:0 4px;border-radius:10px;border:2px dashed;background:var(--surface-page);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:1;box-sizing:border-box}.pl-liveav.inl{position:static;flex-shrink:0}' +
+    '.pl-livebar{display:flex;align-items:center;gap:10px;padding:8px 12px;border:2px dashed var(--lc);border-radius:6px;font-size:13px;color:var(--text-secondary)}.pl-livebar b{color:var(--text-primary)}' +
     '.pl-chgbar{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:10px 14px;border-radius:6px;background:var(--surface-subtle);font-size:13px}.pl-chgbar b{color:var(--text-accent)}.pl-chgbar span{color:var(--text-muted);font-size:12px;flex:1;min-width:180px}' +
     '.pl-dgl button.pl-dgadd{color:var(--text-muted);font-size:12px;font-weight:600}.pl-dgl button.pl-dgadd:hover{color:var(--text-accent)}.pl-dgnone{padding:10px 14px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--surface-subtle)}' +
     '.pl-comp{gap:16px}.pl-ttl{font-size:22px;font-weight:600;border:1px solid transparent;border-radius:5px;padding:4px 6px;margin-left:-7px;outline:none;background:transparent;width:100%}.pl-ttl:hover{border-color:var(--border-default)}.pl-ttl:focus{border-color:#B9052D}.pl-ttl.big{font-size:30px;margin-left:-7px}' +
@@ -1417,6 +1460,6 @@
     hasBoard: function (pid) { return hasPage(pid, 'board'); },
     chgTotal: chgTotal, markSeen: markSeen,
     sysOpts: sysOpts, wpOpts: wpOpts, chipsFor: chipsFor,
-    _plan: plan, _chg: function (pid, id) { return chgFor(pid, pagesOf(pid).find(function (x) { return x.id === id; })); }
+    _liveKey: function () { return myLiveKey(); }, _plan: plan, _chg: function (pid, id) { return chgFor(pid, pagesOf(pid).find(function (x) { return x.id === id; })); }
   };
 })();

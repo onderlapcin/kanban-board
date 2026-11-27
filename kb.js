@@ -345,6 +345,10 @@
       pres.me = pid; pres.task = taskId; presPush();
     },
     editorsOf: function (taskId) { return (taskId && pres.others[taskId]) || []; },
+    // proje sayfaları: şu an açık/düzenlenen öğe (ör. "pid:comp:abc")
+    setPlanEditing: function (key) { key = key || null; if (key === pres.plan) return; pres.plan = key; presPush(); },
+    planEditorsOf: function (key) { return (key && pres.planOthers[key]) || []; },
+    planLiveSig: function () { return JSON.stringify(pres.planOthers); },
     _presence: presApply,
     isUsernameAccount: function () { return !!(session && usernameOf(rawEmail())); },
     toggleTheme: function () {
@@ -674,26 +678,27 @@
 
 
   /* ---------- canlı varlık: kim hangi görevi şu an açık tutuyor (Supabase Realtime presence) ---------- */
-  var pres = { ch: null, ready: false, me: '', task: null, others: {}, sig: '{}', t: null };
+  var pres = { ch: null, ready: false, me: '', task: null, plan: null, others: {}, planOthers: {}, sig: '{}', t: null };
   function presApply(state) {
-    var o = {}, myKey = session && session.user && session.user.id;
+    var o = {}, po = {}, myKey = session && session.user && session.user.id;
     Object.keys(state || {}).forEach(function (k) {
       if (k === myKey) return;
       (state[k] || []).forEach(function (m) {
+        if (m && m.plan && m.pid) { var pa = po[m.plan] || (po[m.plan] = []); if (!pa.some(function (x) { return x.pid === m.pid; })) pa.push({ pid: m.pid }); }
         if (!m || !m.task || !m.pid) return;
         var a = o[m.task] || (o[m.task] = []);
         if (!a.some(function (x) { return x.pid === m.pid; })) a.push({ pid: m.pid });
       });
     });
-    var sig = JSON.stringify(o);
-    if (sig !== pres.sig) { pres.sig = sig; pres.others = o; rerender(); }
+    var sig = JSON.stringify([o, po]);
+    if (sig !== pres.sig) { pres.sig = sig; pres.others = o; pres.planOthers = po; rerender(); }
   }
   function presTrackNow() {
     var ch = pres.ch;
     if (!ch || !pres.ready) return;
     try {
       pres.dirty = false;
-      var r = ch.track({ pid: pres.me || '', task: pres.task || null, at: Date.now() });
+      var r = ch.track({ pid: pres.me || '', task: pres.task || null, plan: pres.plan || null, at: Date.now() });
       var fail = function () { if (ch === pres.ch) { pres.dirty = true; setTimeout(presEnsure, 3000); } };
       if (r && r.then) r.then(function (res) { if (res !== 'ok') fail(); }, fail);
     } catch (e) {}
