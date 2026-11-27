@@ -792,10 +792,11 @@
       '.kb-rte-ed{outline:none;word-break:break-word}.kb-rte-fl.kb-nolist .kb-ls,.kb-rte-fl.kb-nohead .kb-hs{display:none}.kb-rte-fl button.kb-dd{width:auto;padding:0 6px;gap:3px}' +
       '.kb-rte-pop.kb-rte-menu{display:flex;flex-direction:column;gap:2px;padding:4px;min-width:200px}.kb-rte-menu button{display:flex;align-items:center;gap:10px;border:0;background:transparent;border-radius:4px;padding:7px 10px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;color:var(--text-primary)}.kb-rte-menu button:hover{background:var(--surface-subtle)}' +
       '.kb-rte-ed h2{font-size:20px;font-weight:600;margin:14px 0 6px;line-height:1.3}.kb-rte-ed h3{font-size:16px;font-weight:600;margin:12px 0 4px;line-height:1.35}.kb-rte-ed h2:first-child,.kb-rte-ed h3:first-child{margin-top:0}' +
+      '.kb-html-view h2{font-size:18px;font-weight:600;margin:10px 0 4px;line-height:1.3;color:var(--text-primary)}.kb-html-view h3{font-size:15px;font-weight:600;margin:8px 0 2px;line-height:1.35;color:var(--text-primary)}.kb-html-view h2:first-child,.kb-html-view h3:first-child{margin-top:0}' +
       '.kb-rte-ed[data-kind="cmt"],.kb-rte-ed[data-kind="cmte"]{min-height:1.5em;padding:8px 12px;border:1px solid var(--border-default);border-radius:5px;font-size:13px;line-height:1.5;color:var(--text-primary);background:var(--surface-page)}.kb-rte-ed[data-kind="cmte"]{font-size:14px;min-height:4.5em}.kb-rte-ed[data-kind="cmt"]:focus,.kb-rte-ed[data-kind="cmte"]:focus{border-color:#B9052D}' +
       '.kb-rte-ed ul,.kb-rte-ed ol,.kb-html-view ul,.kb-html-view ol{margin:4px 0;padding-left:22px}.kb-html-view a{color:#0087A0;text-decoration:underline;text-underline-offset:2px;word-break:break-all}html[data-theme="dark"] .kb-html-view a{color:#4FC3D6}' +
       '.kb-html-view div[data-chk]{position:relative;padding-left:26px}.kb-html-view div[data-chk]::before{content:"";position:absolute;left:2px;top:.22em;width:14px;height:14px;border:1.5px solid var(--text-muted);border-radius:3px;box-sizing:border-box}.kb-html-view div[data-chk="1"]::before{background:#B9052D;border-color:#B9052D}.kb-html-view div[data-chk="1"]{color:var(--text-muted);text-decoration:line-through}' +
-      '.kb-rte-ed[data-kind="desc"]{min-height:120px;border:1px solid var(--border-default);border-radius:0 0 5px 5px;padding:12px;font-size:14px;line-height:1.55;color:var(--text-primary);background:var(--surface-page)}' +
+      '.kb-rte-ed[data-kind="desc"]{min-height:120px;border:1px solid var(--border-default);border-radius:5px;padding:12px;font-size:14px;line-height:1.55;color:var(--text-primary);background:var(--surface-page)}' +
       '.kb-rte-ed[data-kind="desc"]:focus{border-color:#B9052D}' +
       '.kb-rte-ed[data-kind="desc"] ul,.kb-rte-ed[data-kind="desc"] ol{margin:4px 0;padding-left:22px}' +
       '.kb-rte-ed[data-kind="sub"]{min-height:1.4em;line-height:1.4;padding:0 2px;border-bottom:1px dashed transparent}' +
@@ -1054,7 +1055,6 @@
       var kind = host.getAttribute('data-kind'), key = host.getAttribute('data-key');
       host.__kind = kind; host.__key = key;
       host.textContent = '';
-      if (kind === 'desc') { var tb = document.createElement('div'); tb.className = 'kb-rte-tb'; tb.setAttribute('role', 'toolbar'); tb.setAttribute('aria-label', 'Metin biçimlendirme'); makeButtons(tb, true); host.appendChild(tb); }
       var ed = document.createElement('div');
       ed.className = 'kb-rte-ed'; ed.setAttribute('data-kind', kind); ed.contentEditable = 'true'; ed.spellcheck = true;
       ed.setAttribute('data-ph', host.getAttribute('data-ph') || '');
@@ -1185,13 +1185,13 @@
       var s = window.getSelection();
       if (!s.rangeCount || s.isCollapsed) { hideFl(); return; }
       var ed = edOfSel();
-      if (!ed || !ed.isContentEditable || ed.getAttribute('data-kind') === 'desc') { hideFl(); return; }
+      if (!ed || !ed.isContentEditable) { hideFl(); return; }
       if (!fl) {
         fl = document.createElement('div'); fl.className = 'kb-rte-fl'; fl.setAttribute('role', 'toolbar'); fl.setAttribute('aria-label', 'Metin biçimlendirme');
         makeButtons(fl, true, true); document.body.appendChild(fl);
       }
       fl.classList.toggle('kb-nolist', ed.getAttribute('data-kind') === 'sub');   // alt görevler tek satır: liste yok
-      fl.classList.toggle('kb-nohead', ed.getAttribute('data-kind') !== 'plan');  // başlıklar yalnızca proje sayfalarında
+      fl.classList.toggle('kb-nohead', ed.getAttribute('data-kind') === 'sub');   // alt görevlerde başlık yok
       fl.style.display = 'flex';
       var r = s.getRangeAt(0).getBoundingClientRect(), w = fl.offsetWidth, h = fl.offsetHeight;
       var top = r.top - h - 8; if (top < 8) top = r.bottom + 8;
