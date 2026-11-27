@@ -31,7 +31,7 @@
   var SEGMENTS = ['Binek araç', 'Ticari araç', 'Diğer'];
 
   /* ---------- durum ---------- */
-  var remote = {}, local = {}, writeT = {}, dbObj = null, started = false;
+  var remote = {}, local = {}, lbase = {}, writeT = {}, dbObj = null, started = false;
   var UI = { tl: 'gantt', zoom: 'month', vSel: null, dg: {}, dgQ: '', modal: null, pop: null };
   var subOf = {};
   try { subOf = JSON.parse(localStorage.getItem('kb-sub') || '{}') || {}; } catch (e) { subOf = {}; }
@@ -85,7 +85,9 @@
   /* ---------- kayıt ---------- */
   function patch(pid, fn, opt) {
     opt = opt || {};
-    var before = plan(pid), cur = clone(before); fn(cur); cur.projectId = pid; stamp(before, cur); local[pid] = cur;
+    var before = plan(pid), cur = clone(before); fn(cur); cur.projectId = pid; stamp(before, cur);
+    if (!local[pid]) lbase[pid] = remote[pid] ? clone(remote[pid]) : null;   // birleştirme tabanı: değişikliğin başladığı sürüm
+    local[pid] = cur;
     clearTimeout(writeT[pid]);
     writeT[pid] = setTimeout(function () { flush(pid); }, opt.now ? 0 : 600);
     if (opt.nav) rerenderApp();
@@ -165,10 +167,14 @@
   }
   function flush(pid) {
     var data = local[pid]; if (!data || !dbObj) return;
-    var sent = JSON.stringify(data);
-    dbObj.doc('plans/' + pid).set(clone(data)).then(function () {
-      remote[pid] = clone(data);
-      if (local[pid] && JSON.stringify(local[pid]) === sent) delete local[pid];
+    var sent = JSON.stringify(data), base = lbase[pid] === undefined ? null : lbase[pid];
+    dbObj.doc('plans/' + pid).set(clone(data), { base: clone(base) }).then(function (merged) {
+      if (merged == null) { delete local[pid]; delete lbase[pid]; return; }
+      merged = norm(merged, pid);
+      remote[pid] = clone(merged);
+      if (local[pid] && JSON.stringify(local[pid]) === sent) { delete local[pid]; delete lbase[pid]; }
+      else if (local[pid]) { local[pid] = norm(window.__kbMerge3(JSON.parse(sent), local[pid], merged, 'a'), pid); lbase[pid] = clone(merged); }
+      if (JSON.stringify(merged) !== sent) { rerenderApp(); refresh(); }
     }, function (e) {
       toast('Proje sayfası kaydedilemedi' + (e && e.code === 'permission_denied' ? ' (yetki yok)' : ''));
     });
@@ -518,7 +524,7 @@
     if (k) {
       var B = 'components.' + ki + '.', D = ro(pid);
       var kci = chgOf(pid, 'guide', k), kli = liveOf(pid + ':components:' + k.id);
-      h += '<div' + chgAttr(kci, 'pl-box pl-comp', kli) + '>' + chgAv(kci) + (kli ? '<div class="pl-livebar" style="--lc:' + kli.bg + '">' + liveAv(kli, true) + '<span><b>' + esc(kli.name) + '</b>' + (kli.more ? ' ve ' + kli.more + ' kişi daha' : '') + ' şu an bu kartı açmış. Aynı alanı birlikte düzenlerseniz son kaydeden geçerli olur.</span></div>' : '');
+      h += '<div' + chgAttr(kci, 'pl-box pl-comp', kli) + '>' + chgAv(kci) + (kli ? '<div class="pl-livebar" style="--lc:' + kli.bg + '">' + liveAv(kli, true) + '<span><b>' + esc(kli.name) + '</b>' + (kli.more ? ' ve ' + kli.more + ' kişi daha' : '') + ' şu an bu kartı açmış. Birlikte düzenleyebilirsiniz; yazdıklarınız anında birleşir.</span></div>' : '');
       h += '<input class="pl-ttl" data-b="' + B + 'name" value="' + esc(k.name || '') + '" placeholder="Komponent adı"' + D + '>';
       h += '<div class="pl-props">' +
         '<label>Sistem' + sel(B + 'sys', k.sys, [['', '—']].concat(p.systems.map(function (s) { return [s.id, s.name || 'Adsız sistem']; })), D) + '</label>' +
@@ -596,7 +602,7 @@
     var p = plan(pid), i = p.pages.findIndex(function (x) { return x.id === pgId; }), pg = p.pages[i], E = canEdit(pid);
     if (!pg) return '<div class="pl-in"><div class="pl-muted">Sayfa bulunamadı.</div></div>';
     var B = 'pages.' + i + '.', nci = chgOf(pid, pg.id, pg), nli = liveOf(pid + ':pages:' + pg.id);
-    return '<div class="pl-in note">' + (nli ? '<div class="pl-livebar" style="--lc:' + nli.bg + '">' + liveAv(nli, true) + '<span><b>' + esc(nli.name) + '</b>' + (nli.more ? ' ve ' + nli.more + ' kişi daha' : '') + ' şu an bu sayfada. Aynı anda düzenlerseniz son kaydeden geçerli olur.</span></div>' : '') + (nci ? '<div class="pl-chgbar" style="--cc:' + nci.bg + '">' + chgAv(nci, true) + '<b>' + esc(nci.name) + ' bu sayfayı değiştirdi</b><span>' + esc(new Date(nci.at).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) + '</span><button type="button" class="pl-btn sm" data-pa="seenpage" data-id="' + esc(pg.id) + '">Gördüm</button></div>' : '') + '<input class="pl-ttl big" data-b="' + B + 'title" data-nav="1" value="' + esc(pg.title || '') + '" placeholder="Başlıksız Sayfa"' + ro(pid) + '>' +
+    return '<div class="pl-in note">' + (nli ? '<div class="pl-livebar" style="--lc:' + nli.bg + '">' + liveAv(nli, true) + '<span><b>' + esc(nli.name) + '</b>' + (nli.more ? ' ve ' + nli.more + ' kişi daha' : '') + ' şu an bu sayfada. Birlikte düzenleyebilirsiniz; yazdıklarınız anında birleşir.</span></div>' : '') + (nci ? '<div class="pl-chgbar" style="--cc:' + nci.bg + '">' + chgAv(nci, true) + '<b>' + esc(nci.name) + ' bu sayfayı değiştirdi</b><span>' + esc(new Date(nci.at).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) + '</span><button type="button" class="pl-btn sm" data-pa="seenpage" data-id="' + esc(pg.id) + '">Gördüm</button></div>' : '') + '<input class="pl-ttl big" data-b="' + B + 'title" data-nav="1" value="' + esc(pg.title || '') + '" placeholder="Başlıksız Sayfa"' + ro(pid) + '>' +
       '<div class="pl-body kb-rte-ed" data-kind="plan" data-b="' + B + 'body" data-t="html" contenteditable="' + (E ? 'true' : 'false') + '" data-ph="Yazmaya başla… Biçimlendirmek, başlık ya da liste yapmak için metni seç.">' + clean(pg.body || '') + '</div></div>';
   }
 
@@ -1460,6 +1466,14 @@
     hasBoard: function (pid) { return hasPage(pid, 'board'); },
     chgTotal: chgTotal, markSeen: markSeen,
     sysOpts: sysOpts, wpOpts: wpOpts, chipsFor: chipsFor,
+    who: function (id) { var pp = person(id), c = COLORS[((pp && pp.color) || 0) % COLORS.length], n = pname(id) || 'Ekip üyesi'; return { bg: c[0], fg: c[1], name: n, ini: ini(n) }; },
+    me: function () { return st().me || ''; },
+    // canlı ortak yazım anahtarı: sıra numarası yerine öğe kimliğiyle (ör. plans/<pid>#components/<id>/notes)
+    yKey: function (pid, b) {
+      var ks = String(b || '').split('.'), d = plan(pid);
+      if (ks.length >= 3 && /^\d+$/.test(ks[1]) && Array.isArray(d[ks[0]])) { var it = d[ks[0]][+ks[1]]; if (!it || it.id == null) return null; return 'plans/' + pid + '#' + ks[0] + '/' + it.id + '/' + ks.slice(2).join('/'); }
+      return 'plans/' + pid + '#' + ks.join('/');
+    },
     _liveKey: function () { return myLiveKey(); }, _plan: plan, _chg: function (pid, id) { return chgFor(pid, pagesOf(pid).find(function (x) { return x.id === id; })); }
   };
 })();

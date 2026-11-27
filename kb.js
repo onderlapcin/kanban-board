@@ -194,6 +194,7 @@
 
   /* ---------- db: Firestore benzeri küçük arayüz, tek "docs" tablosu ---------- */
   var cache = new Map();          // path -> data
+  var stamps = new Map();         // path -> updated_at (çakışma kontrolü için)
   var loaded = false, loading = null;
   var subs = [];
   var notifyT = null;
@@ -201,17 +202,77 @@
   function collOf(path) { var s = path.split('/'); s.pop(); return s.join('/'); }
   function clone(x) { return x == null ? x : JSON.parse(JSON.stringify(x)); }
 
+  /* ---------- üç yönlü birleştirme: aynı belgede farklı alan/öğe değişiklikleri birbirini ezmez ----------
+     b: değişikliğe başlarken görülen sürüm, a: benim sürümüm, c: sunucudaki güncel sürüm.
+     Aynı alanı ikisi de değiştirdiyse `pref` ('a' ya da 'c') kazanır. */
+  function same(x, y) { return x === y || JSON.stringify(x) === JSON.stringify(y); }
+  function isObj(x) { return !!x && typeof x === 'object' && !Array.isArray(x); }
+  function idArr(x) { return Array.isArray(x) && x.length > 0 && x.every(function (e) { return isObj(e) && e.id != null; }); }
+  function primArr(x) { return Array.isArray(x) && x.every(function (e) { return e == null || typeof e !== 'object'; }); }
+  var SETS = { assignees: 1, labels: 1, tags: 1, taskOrder: 1, removed: 1, owners: 1, std: 1, watchers: 1 };
+  function merge3(b, a, c, pref, key) {
+    if (same(a, c)) return a;
+    if (same(b, a)) return c;
+    if (same(b, c)) return a;
+    pref = pref || 'a';
+    if (isObj(a) && isObj(c)) {
+      var bb = isObj(b) ? b : {}, o = {}, keys = {};
+      Object.keys(a).concat(Object.keys(c)).forEach(function (k) { keys[k] = 1; });
+      Object.keys(keys).forEach(function (k) {
+        var inA = Object.prototype.hasOwnProperty.call(a, k), inC = Object.prototype.hasOwnProperty.call(c, k), inB = Object.prototype.hasOwnProperty.call(bb, k);
+        if (inA && inC) { o[k] = merge3(bb[k], a[k], c[k], pref, k); return; }
+        if (inA) { if (!inB || !same(bb[k], a[k])) o[k] = a[k]; return; }      // c'de yok: c sildiyse ve ben değiştirmediysem sil
+        if (!inB || !same(bb[k], c[k])) o[k] = c[k];
+      });
+      if (o.u != null || a.u != null || c.u != null) {     // öğe damgası: son değişiklik
+        var ua = a.u || 0, uc = c.u || 0;
+        if (ua || uc) { o.u = Math.max(ua, uc); var ub = ua >= uc ? a.ub : c.ub; if (ub) o.ub = ub; }
+      }
+      return o;
+    }
+    if ((idArr(a) || idArr(c) || idArr(b)) && Array.isArray(a) && Array.isArray(c) && (!a.length || idArr(a)) && (!c.length || idArr(c))) {
+      var B = Array.isArray(b) && idArr(b) ? b : [], mb = {}, ma = {}, mc = {};
+      B.forEach(function (x) { mb[x.id] = x; }); a.forEach(function (x) { ma[x.id] = x; }); c.forEach(function (x) { mc[x.id] = x; });
+      var ordA = a.map(function (x) { return x.id; }), ordC = c.map(function (x) { return x.id; }), ordB = B.map(function (x) { return x.id; });
+      var aMoved = !same(ordA.filter(function (id) { return mb[id]; }), ordB.filter(function (id) { return ma[id]; }));
+      var order = (aMoved ? ordA : ordC).slice(), other = aMoved ? ordC : ordA, seen = {};
+      order.forEach(function (id) { seen[id] = 1; });
+      other.forEach(function (id, i) {
+        if (seen[id]) return; seen[id] = 1;
+        var prev = other[i - 1], at = prev != null ? order.indexOf(prev) : -1; order.splice(at + 1, 0, id);
+      });
+      var out = [];
+      order.forEach(function (id) {
+        var x = ma[id], y = mc[id], z = mb[id];
+        if (x && y) { out.push(merge3(z, x, y, pref)); return; }
+        if (x) { if (!z) out.push(x); else if (!same(z, x)) out.push(x); return; }   // c sildi; ben değiştirdiysem koru
+        if (y) { if (!z) out.push(y); else if (!same(z, y)) out.push(y); }
+      });
+      return out;
+    }
+    if (SETS[key] && primArr(a) && primArr(c) && (b == null || primArr(b))) {    // küme gibi (ör. sorumlular, etiketler)
+      var bs = (b || []).map(String), as = a.map(String), cs = c.map(String);
+      var res = a.filter(function (v, i) { return !(bs.indexOf(as[i]) >= 0 && cs.indexOf(as[i]) < 0); });
+      c.forEach(function (v, i) { if (as.indexOf(cs[i]) < 0 && bs.indexOf(cs[i]) < 0) res.push(v); });
+      return res;
+    }
+    return pref === 'c' ? c : a;
+  }
+  window.__kbMerge3 = merge3;
+
   async function loadAll() {
     var c = client(), all = [], from = 0, size = 1000;
     for (;;) {
-      var r = await c.from('docs').select('path,coll,data').range(from, from + size - 1);
+      var r = await c.from('docs').select('path,coll,data,updated_at').range(from, from + size - 1);
       if (r.error) throw r.error;
       all = all.concat(r.data || []);
       if (!r.data || r.data.length < size) break;
       from += size;
     }
     var next = new Map();
-    all.forEach(function (row) { next.set(row.path, row.data); });
+    var ns = new Map();
+    all.forEach(function (row) { next.set(row.path, row.data); if (row.updated_at) ns.set(row.path, row.updated_at); });
+    stamps = ns;
     var changed = !loaded || next.size !== cache.size;
     if (!changed) next.forEach(function (v, k) { if (!changed && JSON.stringify(cache.get(k)) !== JSON.stringify(v)) changed = true; });
     cache = next; loaded = true;
@@ -243,8 +304,9 @@
     var c = client();
     channel = c.channel('kb-docs')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'docs' }, function (p) {
-        if (p.eventType === 'DELETE') { var op = p.old && p.old.path; if (op && cache.has(op)) { cache.delete(op); notify(); } return; }
+        if (p.eventType === 'DELETE') { var op = p.old && p.old.path; if (op && cache.has(op)) { cache.delete(op); stamps.delete(op); notify(); } return; }
         var row = p.new; if (!row || !row.path) return;
+        if (row.updated_at) { var ps = stamps.get(row.path); if (!ps || Date.parse(row.updated_at) >= Date.parse(ps)) stamps.set(row.path, row.updated_at); else return; }
         if (JSON.stringify(cache.get(row.path)) !== JSON.stringify(row.data)) { cache.set(row.path, row.data); notify(); }
       })
       .subscribe(function (st) { if (st === 'SUBSCRIBED' && loaded) loadAll().catch(function () {}); });
@@ -276,10 +338,14 @@
         return function () { s.dead = true; };
       },
       get: async function () { await ensureLoaded(); return snapFor({ path: path, kind: 'doc' }); },
-      set: async function (data) {
+      // opt.base verilirse: değişikliğin başladığı sürüm. Sunucudaki güncel sürümle öğe bazında birleştirilip
+      // çakışma kontrollü yazılır; sonuç (birleşmiş belge) döner. Belge bu arada silindiyse null döner.
+      set: async function (data, opt) {
+        if (opt && 'base' in opt) return putMerged(path, data, opt.base, opt.pref);
         var r = await client().from('docs').upsert({ path: path, coll: collOf(path), data: data }, { onConflict: 'path' });
         if (r.error) throw err(r.error);
         cache.set(path, clone(data)); notify();
+        return data;
       },
       delete: async function () {
         var r = await client().from('docs').delete().eq('path', path);
@@ -290,6 +356,44 @@
       doc: function (id) { return ref(path + '/' + id); },
       collection: function (id) { return ref(path + '/' + id); }
     };
+  }
+  var putQ = {};      // aynı belgeye yazımlar sırayla
+  function putMerged(path, data, base, pref) {
+    var prev = putQ[path] || Promise.resolve();
+    var job = prev.catch(function () {}).then(function () { return putMergedNow(path, data, base, pref); });
+    putQ[path] = job;
+    return job;
+  }
+  async function putMergedNow(path, data, base, pref) {
+    var c = client(), theirs = cache.has(path) ? cache.get(path) : undefined, at = stamps.get(path) || null;
+    for (var i = 0; i < 6; i++) {
+      var merged = theirs === undefined ? data : merge3(base, data, theirs, pref || 'a');
+      if (theirs !== undefined && same(merged, theirs) && at) { return clone(theirs); }
+      var r = await c.rpc('kb_doc_put', { p_path: path, p_coll: collOf(path), p_data: merged, p_expect: theirs === undefined ? null : at });
+      if (r.error) {
+        if (/kb_doc_put|function|PGRST202/i.test(String(r.error.message || '') + (r.error.code || '')) && !/permission|42501/i.test(String(r.error.message) + r.error.code)) {
+          // sunucu tarafı henüz güncellenmediyse eski yol
+          var u = await c.from('docs').upsert({ path: path, coll: collOf(path), data: merged }, { onConflict: 'path' });
+          if (u.error) throw err(u.error);
+          cache.set(path, clone(merged)); notify(); return merged;
+        }
+        throw err(r.error);
+      }
+      var res = r.data;
+      if (!res || typeof res !== 'object' || !('ok' in res)) {      // beklenmeyen cevap: eski yolla yaz
+        var u2 = await c.from('docs').upsert({ path: path, coll: collOf(path), data: merged }, { onConflict: 'path' });
+        if (u2.error) throw err(u2.error);
+        cache.set(path, clone(merged)); notify(); return merged;
+      }
+      if (res.ok) {
+        cache.set(path, clone(merged)); if (res.at) stamps.set(path, res.at); notify();
+        return merged;
+      }
+      if (res.data == null && res.at == null && theirs !== undefined) { cache.delete(path); stamps.delete(path); notify(); return null; }   // bu arada silinmiş
+      theirs = res.data == null ? undefined : res.data; at = res.at || null;
+      if (theirs !== undefined) { cache.set(path, clone(theirs)); if (at) stamps.set(path, at); }
+    }
+    throw err({ message: 'Kayıt çakışması çözülemedi, tekrar dene' });
   }
   var db = { doc: ref, collection: ref };
 
@@ -350,6 +454,9 @@
     planEditorsOf: function (key) { return (key && pres.planOthers[key]) || []; },
     planLiveSig: function () { return JSON.stringify(pres.planOthers); },
     _presence: presApply,
+    sb: function () { return client(); },
+    uid: function () { return (session && session.user && session.user.id) || ''; },
+    token: function () { return (session && session.access_token) || ''; },
     isUsernameAccount: function () { return !!(session && usernameOf(rawEmail())); },
     toggleTheme: function () {
       theme = theme === 'dark' ? 'light' : 'dark';
@@ -1171,7 +1278,7 @@
     window.__kbRteRefresh = function () {
       scan();
       document.querySelectorAll('.kb-rte-host').forEach(function (host) {
-        var ed = host.querySelector('.kb-rte-ed'); if (!ed || document.activeElement === ed) return;
+        var ed = host.querySelector('.kb-rte-ed'); if (!ed || document.activeElement === ed || ed.__yOn) return;   // canlı ortak yazımdaysa içeriği o yönetir
         var v = sanitize((api().get && api().get(host.__kind, host.__key)) || '');
         if (v !== host.__last) { host.__last = v; ed.innerHTML = v; }
       });
