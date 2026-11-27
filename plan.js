@@ -930,7 +930,7 @@
   function hideImgBar() { if (imgBar) imgBar.style.display = 'none'; if (imgH) imgH.style.display = 'none'; if (imgSel) imgSel.classList.remove('pl-imgon'); imgSel = null; }
   function showImgBar(img) {
     hideImgBar(); imgSel = img; img.classList.add('pl-imgon');
-    if (!imgBar) {
+    if (false) {
       imgBar = document.createElement('div'); imgBar.className = 'pl-imgbar'; imgBar.setAttribute('role', 'toolbar'); imgBar.setAttribute('aria-label', 'Görsel');
       [['del', 'Görseli sil']].forEach(function (b) {
         var bt = document.createElement('button'); bt.type = 'button'; bt.textContent = b[1]; bt.setAttribute('data-w', b[0]); if (b[0] === 'del') bt.className = 'red';
@@ -960,12 +960,12 @@
       imgH.addEventListener('pointerup', endR); imgH.addEventListener('pointercancel', endR);
       document.body.appendChild(imgH);
     }
-    imgBar.style.display = 'flex'; imgH.style.display = 'block'; placeImgBar();
+    imgH.style.display = 'block'; placeImgBar();
+    try { var rg = document.createRange(); rg.selectNode(img); var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg); } catch (x) {}
   }
   function placeImgBar() {
-    if (!imgBar || !imgSel) return;
-    var r = imgSel.getBoundingClientRect(), w = imgBar.offsetWidth;
-    imgBar.style.top = Math.max(8, r.top + 8) + 'px'; imgBar.style.left = Math.max(8, Math.min(r.left + 8, window.innerWidth - w - 8)) + 'px';
+    if (!imgSel) return;
+    var r = imgSel.getBoundingClientRect();
     if (imgH) { imgH.style.left = (r.right - 8) + 'px'; imgH.style.top = (r.bottom - 8) + 'px'; imgH.setAttribute('data-pct', Math.round(r.width) + ' px'); }
   }
   document.addEventListener('click', function (e) {
@@ -976,6 +976,8 @@
   }, true);
   document.addEventListener('scroll', function () { if (imgSel) { if (!imgSel.isConnected) hideImgBar(); else placeImgBar(); } }, true);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideImgBar(); });
+  document.addEventListener('kb-img-removed', function () { hideImgBar(); });
+  document.addEventListener('selectionchange', function () { if (imgSel && !rsz) { var sl = window.getSelection(); if (!sl.rangeCount || !sl.getRangeAt(0).intersectsNode(imgSel)) hideImgBar(); } });
 
   /* ---------- alt sayfaları sürükleyerek sırala (kenar çubuğu ve sekmeler) ---------- */
   var sdrag = null, sover = null;
@@ -1218,7 +1220,7 @@
     '.pl-upl{display:block;margin:8px 0;padding:18px;border:1.5px dashed var(--border-default);border-radius:6px;color:var(--text-muted);font-size:13px;text-align:center}.pl-upl::after{content:"Görsel yükleniyor…"}' +
     '.pl-imgh{position:fixed;z-index:71;display:none;width:16px;height:16px;border-radius:50%;background:#B9052D;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:nwse-resize;touch-action:none}.pl-imgh::after{content:attr(data-pct);position:absolute;left:20px;top:-4px;font-size:11px;font-weight:600;color:#fff;background:#3F3F3F;border-radius:3px;padding:1px 5px;white-space:nowrap}' +
     'body.pl-resizing,body.pl-resizing *{cursor:nwse-resize!important;user-select:none!important}' +
-    '.pl-body img{cursor:pointer}.pl-body img.pl-imgon{outline:2px solid #B9052D;outline-offset:2px}' +
+    '.pl-body img::selection{background:transparent}.pl-body img{cursor:pointer}.pl-body img.pl-imgon{outline:2px solid #B9052D;outline-offset:2px}' +
     '.pl-imgbar{position:fixed;z-index:70;display:none;gap:2px;padding:4px;background:var(--surface-page);border:1px solid var(--border-default);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.18)}.pl-imgbar button{border:0;background:transparent;border-radius:4px;padding:5px 10px;font:inherit;font-size:12px;font-weight:600;color:var(--text-primary);cursor:pointer}.pl-imgbar button:hover{background:var(--surface-subtle)}.pl-imgbar button.on{background:#3F3F3F;color:#fff}.pl-imgbar button.red{color:#B9052D}' +
     '.pl-ren{position:fixed;z-index:80;box-sizing:border-box;border:1px solid #B9052D;border-radius:5px;padding:0 10px;font:inherit;font-size:13px;color:var(--text-primary);background:var(--surface-page);outline:none;box-shadow:0 4px 14px rgba(0,0,0,.14)}' +
     '.kb-subnav::-webkit-scrollbar{height:0}[data-kb-sub][draggable="true"]{cursor:grab}' +

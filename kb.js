@@ -799,7 +799,7 @@
       '.kb-rte-tb button,.kb-rte-fl button{width:30px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--text-primary);cursor:pointer;font:600 13px inherit;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;padding:0}' +
       '.kb-rte-tb button:hover,.kb-rte-fl button:hover{background:var(--surface-muted)}' +
       '.kb-rte-tb .sep,.kb-rte-fl .sep{width:1px;height:18px;background:var(--border-default);margin:0 4px}' +
-      '.kb-rte-ed{outline:none;word-break:break-word}.kb-rte-fl.kb-nolist .kb-ls,.kb-rte-fl.kb-nohead .kb-hs{display:none}.kb-rte-fl button.kb-dd{width:auto;padding:0 6px;gap:3px}' +
+      '.kb-rte-ed{outline:none;word-break:break-word}.kb-rte-fl.kb-nolist .kb-ls,.kb-rte-fl.kb-nohead .kb-hs,.kb-rte-fl:not(.kb-hasimg) .kb-is{display:none}.kb-rte-fl button.kb-red{color:#B9052D}.kb-rte-fl button.kb-dd{width:auto;padding:0 6px;gap:3px}' +
       '.kb-rte-pop.kb-rte-menu{display:flex;flex-direction:column;gap:2px;padding:4px;min-width:200px}.kb-rte-menu button{display:flex;align-items:center;gap:10px;border:0;background:transparent;border-radius:4px;padding:7px 10px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;color:var(--text-primary)}.kb-rte-menu button:hover{background:var(--surface-subtle)}' +
       '.kb-rte-ed h2{font-size:20px;font-weight:600;margin:14px 0 6px;line-height:1.3}.kb-rte-ed h3{font-size:16px;font-weight:600;margin:12px 0 4px;line-height:1.35}.kb-rte-ed h2:first-child,.kb-rte-ed h3:first-child{margin-top:0}' +
       '.kb-html-view h2{font-size:18px;font-weight:600;margin:10px 0 4px;line-height:1.3;color:var(--text-primary)}.kb-html-view h3{font-size:15px;font-weight:600;margin:8px 0 2px;line-height:1.35;color:var(--text-primary)}.kb-html-view h2:first-child,.kb-html-view h3:first-child{margin-top:0}' +
@@ -845,6 +845,7 @@
       olist: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="10" y1="6" x2="20" y2="6"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="18" x2="20" y2="18"/><text x="2" y="8.5" font-size="7.5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="2" y="14.5" font-size="7.5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="2" y="20.5" font-size="7.5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>',
       check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1.5"/><polyline points="4.6 7.6 6.2 9.2 8.8 6"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><line x1="13" y1="7.5" x2="21" y2="7.5"/><line x1="13" y1="17.5" x2="21" y2="17.5"/></svg>',
       link: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>',
+      trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
       clear: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/><line x1="3" y1="3" x2="21" y2="21" stroke="#B9052D"/></svg>'
     };
     var saved = null, pop = null, fl = null;
@@ -1002,11 +1003,11 @@
           ['bold', '<b>B</b>', 'Kalın (Ctrl+B)'], ['italic', '<i style="font-weight:500">I</i>', 'İtalik (Ctrl+I)'], ['underline', '<span style="text-decoration:underline;font-weight:500">U</span>', 'Altı çizili (Ctrl+U)'], ['strikeThrough', ICON.strike, 'Üstü çizili'], ['|'],
           ['@color', ICON.color, 'Yazı rengi'], ['@hilite', ICON.hilite, 'Vurgula'], ['|', 'L'],
           ['@@lists', ICON.list + CHEV, 'Listeler: madde işaretli, numaralı, onay kutulu', 'L'], ['|'],
-          ['@@link', ICON.link, 'Bağlantı ekle (Ctrl+K)'], ['removeFormat', ICON.clear, 'Biçimi temizle']];
+          ['@@link', ICON.link, 'Bağlantı ekle (Ctrl+K)'], ['removeFormat', ICON.clear, 'Biçimi temizle'], ['|', 'I'], ['@@delimg', ICON.trash, 'Görseli sil', 'I']];
         defs2.forEach(function (d) {
-          if (d[0] === '|') { var sp = document.createElement('span'); sp.className = 'sep' + (d[1] === 'L' ? ' kb-ls' : d[1] === 'H' ? ' kb-hs' : ''); bar.appendChild(sp); return; }
+          if (d[0] === '|') { var sp = document.createElement('span'); sp.className = 'sep' + (d[1] === 'L' ? ' kb-ls' : d[1] === 'H' ? ' kb-hs' : d[1] === 'I' ? ' kb-is' : ''); bar.appendChild(sp); return; }
           var b = document.createElement('button'); b.type = 'button'; b.innerHTML = d[1]; b.title = d[2]; b.setAttribute('aria-label', d[2]);
-          if (d[3] === 'L') b.className = 'kb-ls kb-dd'; if (d[3] === 'H') b.className = 'kb-hs kb-dd';
+          if (d[3] === 'L') b.className = 'kb-ls kb-dd'; if (d[3] === 'H') b.className = 'kb-hs kb-dd'; if (d[3] === 'I') b.className = 'kb-is kb-red';
           if (d[0].indexOf('@@') === 0 && d[0] !== '@@link') b.setAttribute('aria-haspopup', 'menu');
           b.addEventListener('mousedown', function (e) { e.preventDefault(); saveSel(); });
           b.addEventListener('click', function () {
@@ -1018,6 +1019,12 @@
               ['ul', ICON.list + '<span>Madde işaretli liste</span>', function () { exec('insertUnorderedList'); }],
               ['ol', ICON.olist + '<span>Numaralı liste</span>', function () { exec('insertOrderedList'); }],
               ['chk', ICON.check + '<span>Onay kutulu liste</span>', function () { toggleCheck(); }]]); }
+            else if (d[0] === '@@delimg') {
+              restoreSel(); var ed0 = edOfSel(), sl = window.getSelection();
+              if (sl.rangeCount) { var rg = sl.getRangeAt(0), imgs = []; if (ed0) Array.prototype.forEach.call(ed0.querySelectorAll('img'), function (im) { if (rg.intersectsNode(im)) imgs.push(im); }); imgs.forEach(function (im) { im.remove(); }); }
+              hideFl(); if (ed0) queueSave(ed0, true);
+              document.dispatchEvent(new CustomEvent('kb-img-removed'));
+            }
             else if (d[0] === '@@link') { if (pop) { closePop(); return; } openLinkPop(b.getBoundingClientRect()); }
             else if (d[0].charAt(0) === '@') { if (pop) { closePop(); return; } openPop(b, d[0].slice(1)); }
             else if (d[0] === 'removeFormat') { exec('removeFormat'); exec('hiliteColor', 'transparent'); }
@@ -1204,6 +1211,8 @@
       }
       fl.classList.toggle('kb-nolist', ed.getAttribute('data-kind') === 'sub');   // alt görevler tek satır: liste yok
       fl.classList.toggle('kb-nohead', ed.getAttribute('data-kind') === 'sub');   // alt görevlerde başlık yok
+      var hasImg = false; try { var rg0 = s.getRangeAt(0); hasImg = Array.prototype.some.call(ed.querySelectorAll('img'), function (im) { return rg0.intersectsNode(im); }); } catch (e) {}
+      fl.classList.toggle('kb-hasimg', hasImg);
       fl.style.display = 'flex';
       var r = s.getRangeAt(0).getBoundingClientRect(), w = fl.offsetWidth, h = fl.offsetHeight;
       var top = r.top - h - 8; if (top < 8) top = r.bottom + 8;
