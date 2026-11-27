@@ -349,21 +349,36 @@
   }
   function gantt(pid) {
     var p = plan(pid), r = range(p), m0 = mIdx(r[0]), m1 = mIdx(r[1]) + 1, nm = Math.max(1, m1 - m0);
-    var mw = UI.zoom === 'month' ? 56 : 22, W = nm * mw;
+    var mw = UI.zoom === 'month' ? 124 : 22, W = nm * mw;
     function x(ym, f) { return ((mIdx(ym) - m0) + (f || 0)) * mw; }
     function xd(d) { return x(d.slice(0, 7), dayFrac(d)); }
     function P(v) { return (Math.max(0, Math.min(W, v)) / W * 100).toFixed(4) + '%'; }
     var months = '', grid = '';
     for (var i = 0; i < nm; i++) {
       var mi = m0 + i, y = Math.floor(mi / 12), mo = mi % 12;
-      if (UI.zoom === 'month') months += '<div style="width:' + P(mw) + '">' + (mo === 0 || i === 0 ? '<b>' + y + '</b>' : '&nbsp;') + '<span>' + MON[mo] + '</span></div>';
+      if (UI.zoom === 'month') months += '<div style="width:' + P(mw) + '"><span><b>' + MON[mo] + '</b>' + (mo === 0 || i === 0 ? ' ' + y : '') + '</span></div>';
       else if (mo % 3 === 0 || i === 0) { var span = Math.min(3 - (mo % 3), nm - i); months += '<div style="width:' + P(span * mw) + '">' + (mo < 3 || i === 0 ? '<b>' + y + '</b>' : '&nbsp;') + '<span>Ç' + (Math.floor(mo / 3) + 1) + '</span></div>'; }
       grid += '<div style="width:' + P(mw) + ';' + (UI.zoom === 'quarter' && mo % 3 !== 0 ? 'border-left-color:transparent' : '') + '"></div>';
+    }
+    // ISO hafta numaraları (Ay görünümünde ayların altında: H30, H31…)
+    var weeks = '', wlines = '';
+    if (UI.zoom === 'month') {
+      var d0 = new Date(Math.floor(m0 / 12), m0 % 12, 1), dEnd = new Date(Math.floor(m1 / 12), m1 % 12, 1);
+      var dd = new Date(d0); dd.setDate(dd.getDate() - ((dd.getDay() + 6) % 7));   // haftanın pazartesisi
+      function dstr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+      function isoW(d) { var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); var dn = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - dn); var y1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y1) / 864e5 + 1) / 7); }
+      for (; dd < dEnd; dd.setDate(dd.getDate() + 7)) {
+        var a1 = Math.max(0, xd(dstr(dd))), nx = new Date(dd); nx.setDate(nx.getDate() + 7);
+        var b1 = nx >= dEnd ? W : xd(dstr(nx)); if (b1 - a1 < 14) continue;
+        var now = todayStr() >= dstr(dd) && todayStr() < dstr(nx);
+        weeks += '<span class="g-wk' + (now ? ' now' : '') + '"' + (now ? ' title="Bu hafta"' : '') + ' style="left:' + P(a1) + ';width:' + P(b1 - a1) + '">H' + isoW(dd) + '</span>';
+        if (a1 > 0) wlines += '<i style="left:' + P(a1) + '"></i>';
+      }
     }
     var T = todayStr(), tx = xd(T), showT = tx >= 0 && tx <= W;
     var today = showT ? '<div class="g-today" style="left:' + P(tx) + '"></div>' : '';
     var DR = canEdit(pid);
-    function row(lab, cls, inner, dk, id, grp) { return '<div class="g-lab ' + cls + '"' + (dk ? ' data-gk="' + dk + '" data-gid="' + esc(id) + '" data-grp="' + esc(grp || '') + '"' + (DR ? ' draggable="true"' : '') : (grp != null ? ' data-gk="grp" data-grp="' + esc(grp) + '"' : '')) + '>' + (dk && DR ? '<span class="g-grip" aria-hidden="true">⋮⋮</span>' : '') + lab + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + today + inner + '</div>'; }
+    function row(lab, cls, inner, dk, id, grp) { return '<div class="g-lab ' + cls + '"' + (dk ? ' data-gk="' + dk + '" data-gid="' + esc(id) + '" data-grp="' + esc(grp || '') + '"' + (DR ? ' draggable="true"' : '') : (grp != null ? ' data-gk="grp" data-grp="' + esc(grp) + '"' : '')) + '>' + (dk && DR ? '<span class="g-grip" aria-hidden="true">⋮⋮</span>' : '') + lab + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + (wlines ? '<div class="g-wl">' + wlines + '</div>' : '') + today + inner + '</div>'; }
     function bar(w, color) {
       if (!w.start) return '';
       var a = x(w.start), b = x(w.end || w.start, 1);
@@ -371,7 +386,7 @@
     }
     function wpRow(w, color, grp) { return row('<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="g-nm">' + esc(w.name || '') + '</span><small>%' + (+w.pct || 0) + '</small>', 'wp', bar(w, color), 'wp', w.id, grp); }
     var h = '<div class="gantt"><div class="g-wrap"><div class="g-tbl" data-m0="' + m0 + '" data-nm="' + nm + '" style="grid-template-columns:max-content minmax(' + W + 'px,1fr)">';
-    h += '<div class="g-lab g-head">Faz / iş paketi</div><div class="g-tl g-head"><div class="g-months">' + months + '</div>' + (showT ? '<div class="g-today-l" style="left:' + P(tx) + '">BUGÜN</div>' : '') + '</div>';
+    h += '<div class="g-lab g-head' + (weeks ? ' wk' : '') + '">Faz / iş paketi</div><div class="g-tl g-head' + (weeks ? ' wk' : '') + '"><div class="g-months">' + months + '</div>' + (weeks ? '<div class="g-weeks">' + weeks + '</div>' : '') + (showT ? '<div class="g-today-l" style="left:' + P(tx) + '">BUGÜN</div>' : '') + '</div>';
     if (p.milestones.length) h += row('Kilometre taşları', 'ph', p.milestones.filter(function (m) { return m.date; }).map(function (m) { var xx = xd(m.date); return '<span class="g-ms" title="' + esc((m.code ? m.code + ' · ' : '') + (m.name || '') + ' · ' + fmtD(m.date)) + '" style="left:' + P(xx) + ';background:' + (m.done ? '#2E8B57' : 'var(--surface-page)') + '"></span><span class="g-ms-l" style="left:calc(' + P(xx) + ' + 12px)">' + esc(m.code || m.name || '') + '</span>'; }).join(''));
     var used = {};
     p.phases.forEach(function (ph) {
@@ -1238,6 +1253,9 @@
     '.g-bar{min-width:6px;box-sizing:border-box;position:absolute;top:9px;height:20px;border-radius:4px;display:flex;align-items:center;overflow:hidden;font-size:11px;font-weight:600;color:#fff;white-space:nowrap}.g-bar .fill{position:absolute;inset:0 auto 0 0;background:rgba(0,0,0,.22)}.g-bar .tx{position:relative;padding:0 8px}.g-bar.phase{top:12px;height:14px;border-radius:3px;opacity:.9}' +
     '.g-ms{position:absolute;top:10px;width:16px;height:16px;transform:translateX(-8px) rotate(45deg);border:2px solid var(--surface-page);box-shadow:0 0 0 1px var(--text-secondary);z-index:1}.g-ms-l{position:absolute;top:9px;font-size:11px;font-weight:600;white-space:nowrap}' +
     '.g-today{position:absolute;top:0;bottom:0;width:2px;background:#B9052D;z-index:1;pointer-events:none}.g-today-l{position:absolute;bottom:3px;transform:translateX(-50%);background:#B9052D;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.04em;z-index:2}' +
+    '.g-head.wk .g-today-l{display:none}.g-wk.now{color:#fff;background:#B9052D;border-radius:3px;border-left-color:transparent}.g-head.wk{min-height:58px}.g-head.wk .g-months{height:30px}.g-head.wk .g-months div{justify-content:flex-start;padding-top:8px}.g-head .g-months b{font-weight:700}' +
+    '.g-weeks{position:absolute;left:0;right:0;bottom:0;height:24px;border-top:1px solid var(--border-default)}.g-wk{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;letter-spacing:0;color:var(--text-muted);border-left:1px solid var(--border-default);box-sizing:border-box;overflow:hidden}' +
+    '.g-wl{position:absolute;inset:0;pointer-events:none}.g-wl i{position:absolute;top:0;bottom:0;border-left:1px dashed var(--surface-subtle)}' +
     '.pl-sw{width:8px;height:8px;border-radius:2px;flex-shrink:0}' +
     '.g-bar.g-ed{cursor:grab;touch-action:none}.g-bar.g-drag{cursor:grabbing;box-shadow:0 2px 8px rgba(0,0,0,.25);z-index:2;opacity:.92}' +
     '.g-h{position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:1}.g-h.l{left:0}.g-h.r{right:0}.g-h::after{content:"";position:absolute;top:3px;bottom:3px;width:3px;border-radius:2px;background:rgba(255,255,255,.85);opacity:0;transition:opacity .1s}.g-h.l::after{left:2px}.g-h.r::after{right:2px}.g-bar.g-ed:hover .g-h::after,.g-bar.g-drag .g-h::after{opacity:1}' +
