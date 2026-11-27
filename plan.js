@@ -728,7 +728,7 @@
     if (t === 'num') return Math.max(0, Math.min(100, Math.round(+el.value || 0)));
     if (t === 'lines') return el.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
     if (t === 'csv') return el.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-    if (t === 'html') return clean(el.innerHTML);
+    if (t === 'html') return clean(el.innerHTML).replace(/\u200b/g, '');
     return el.value;
   }
   // tıklama sürerken DOM'u yenileme: aksi halde basılan düğme değişir ve tıklama kaybolur
@@ -876,6 +876,88 @@
     e.preventDefault(); z.classList.remove('over');
     uploadFiles(pidOf(z), z.getAttribute('data-cid'), e.dataTransfer && e.dataTransfer.files);
   });
+
+  /* ---------- boş sayfalara görsel: yapıştır / sürükle-bırak, tıkla: boyut ---------- */
+  function imgFiles(list) { return Array.prototype.filter.call(list || [], function (f) { return f && /^image\//.test(f.type || ''); }); }
+  function insertImages(ed, files, range) {
+    var pid = pidOf(ed); if (!pid || !canEdit(pid) || !files.length) return;
+    if (!range) { range = document.createRange(); range.selectNodeContents(ed); range.collapse(false); }
+    range.deleteContents();
+    var marks = files.map(function () { var m = document.createElement('span'); m.className = 'pl-upl'; m.contentEditable = 'false'; return m; });
+    marks.slice().reverse().forEach(function (m) { range.insertNode(m); });
+    function caretAfter(node) { try { if (!node.isConnected) return; var sp = document.createTextNode('\u200b'); node.after(sp); var after = document.createRange(); after.setStart(sp, 1); after.collapse(true); var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(after); } catch (x) {} }
+    ed.focus(); caretAfter(marks[marks.length - 1]);
+    files.forEach(function (f, i) {
+      var m = marks[i];
+      if (f.size > 20 * 1048576) { m.remove(); toast('Görsel 20 MB sınırını aşıyor'); return; }
+      (window.claude ? window.claude.use('assets') : Promise.resolve(null)).then(function (as) {
+        if (!as) { m.remove(); toast('Görsel yükleme iznin yok'); return; }
+        return as.upload(f).then(function (r) {
+          var im = document.createElement('img'); im.src = r.url; im.alt = f.name && f.name !== 'image.png' ? f.name : 'Görsel'; im.setAttribute('data-w', 'l');
+          var sl2 = window.getSelection(), keep = sl2.rangeCount ? sl2.getRangeAt(0).cloneRange() : null;
+          if (m.isConnected) m.replaceWith(im); else ed.appendChild(im);
+          if (keep && document.activeElement === ed) { try { sl2.removeAllRanges(); sl2.addRange(keep); } catch (x) {} }
+          ed.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+      }).catch(function () { m.remove(); toast('Görsel yüklenemedi'); });
+    });
+  }
+  document.addEventListener('paste', function (e) {
+    var ed = e.target.closest && e.target.closest('.kb-plan-host .pl-body[contenteditable="true"]'); if (!ed || !e.clipboardData) return;
+    var files = [];
+    Array.prototype.forEach.call(e.clipboardData.items || [], function (it) { if (it.kind === 'file') { var f = it.getAsFile(); if (f) files.push(f); } });
+    files = imgFiles(files); if (!files.length) return;
+    e.preventDefault(); e.stopPropagation();
+    var sel = window.getSelection(), r = sel.rangeCount && ed.contains(sel.getRangeAt(0).startContainer) ? sel.getRangeAt(0) : null;
+    insertImages(ed, files, r);
+  }, true);
+  document.addEventListener('dragover', function (e) {
+    var ed = e.target.closest && e.target.closest('.kb-plan-host .pl-body[contenteditable="true"]'); if (!ed || sdrag || rdrag) return;
+    if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); }
+  });
+  document.addEventListener('drop', function (e) {
+    var ed = e.target.closest && e.target.closest('.kb-plan-host .pl-body[contenteditable="true"]'); if (!ed || sdrag || rdrag) return;
+    var files = imgFiles(e.dataTransfer && e.dataTransfer.files); if (!files.length) return;
+    e.preventDefault();
+    var r = null;
+    try { if (document.caretRangeFromPoint) r = document.caretRangeFromPoint(e.clientX, e.clientY); else if (document.caretPositionFromPoint) { var cp = document.caretPositionFromPoint(e.clientX, e.clientY); r = document.createRange(); r.setStart(cp.offsetNode, cp.offset); } } catch (x) { r = null; }
+    if (r && !ed.contains(r.startContainer)) r = null;
+    insertImages(ed, files, r);
+  });
+  var imgBar = null, imgSel = null;
+  function hideImgBar() { if (imgBar) imgBar.style.display = 'none'; if (imgSel) imgSel.classList.remove('pl-imgon'); imgSel = null; }
+  function showImgBar(img) {
+    hideImgBar(); imgSel = img; img.classList.add('pl-imgon');
+    if (!imgBar) {
+      imgBar = document.createElement('div'); imgBar.className = 'pl-imgbar'; imgBar.setAttribute('role', 'toolbar'); imgBar.setAttribute('aria-label', 'Görsel');
+      [['s', 'Küçük'], ['m', 'Orta'], ['l', 'Tam genişlik'], ['del', 'Sil']].forEach(function (b) {
+        var bt = document.createElement('button'); bt.type = 'button'; bt.textContent = b[1]; bt.setAttribute('data-w', b[0]); if (b[0] === 'del') bt.className = 'red';
+        bt.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        bt.addEventListener('click', function () {
+          var im = imgSel; if (!im) return; var ed = im.closest('.kb-rte-ed');
+          if (b[0] === 'del') { im.remove(); hideImgBar(); } else { im.setAttribute('data-w', b[0]); placeImgBar(); }
+          if (ed) ed.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        imgBar.appendChild(bt);
+      });
+      document.body.appendChild(imgBar);
+    }
+    imgBar.style.display = 'flex'; placeImgBar();
+  }
+  function placeImgBar() {
+    if (!imgBar || !imgSel) return;
+    var r = imgSel.getBoundingClientRect(), w = imgBar.offsetWidth;
+    imgBar.style.top = Math.max(8, r.top + 8) + 'px'; imgBar.style.left = Math.max(8, Math.min(r.left + 8, window.innerWidth - w - 8)) + 'px';
+    Array.prototype.forEach.call(imgBar.children, function (b) { b.classList.toggle('on', b.getAttribute('data-w') === (imgSel.getAttribute('data-w') || 'l')); });
+  }
+  document.addEventListener('click', function (e) {
+    if (imgBar && imgBar.contains(e.target)) return;
+    var im = e.target.closest && e.target.closest('.kb-plan-host .pl-body[contenteditable="true"] img');
+    if (im) { showImgBar(im); return; }
+    hideImgBar();
+  }, true);
+  document.addEventListener('scroll', function () { if (imgSel) { if (!imgSel.isConnected) hideImgBar(); else placeImgBar(); } }, true);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideImgBar(); });
 
   /* ---------- alt sayfaları sürükleyerek sırala (kenar çubuğu ve sekmeler) ---------- */
   var sdrag = null, sover = null;
@@ -1115,6 +1197,9 @@
     '.pl-pop{position:fixed;z-index:70;width:320px;max-width:calc(100vw - 16px);background:var(--surface-page);color:var(--text-primary);border:1px solid var(--border-default);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column;gap:2px;font-size:13px}' +
     '.pl-poph{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);padding:8px 10px 4px}' +
     '.pl-pop button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;border-radius:5px;padding:8px 10px;text-align:left;cursor:pointer}.pl-pop button:hover:not(:disabled){background:var(--surface-subtle)}.pl-pop button:disabled{opacity:.45;cursor:default}.pl-pop button.red b{color:#B9052D}html[data-theme="dark"] .pl-pop button.red b{color:#F2557A}.pl-popsep{height:1px;background:var(--border-default);margin:4px 6px}' +
+    '.pl-upl{display:block;margin:8px 0;padding:18px;border:1.5px dashed var(--border-default);border-radius:6px;color:var(--text-muted);font-size:13px;text-align:center}.pl-upl::after{content:"Görsel yükleniyor…"}' +
+    '.pl-body img{cursor:pointer}.pl-body img.pl-imgon{outline:2px solid #B9052D;outline-offset:2px}' +
+    '.pl-imgbar{position:fixed;z-index:70;display:none;gap:2px;padding:4px;background:var(--surface-page);border:1px solid var(--border-default);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.18)}.pl-imgbar button{border:0;background:transparent;border-radius:4px;padding:5px 10px;font:inherit;font-size:12px;font-weight:600;color:var(--text-primary);cursor:pointer}.pl-imgbar button:hover{background:var(--surface-subtle)}.pl-imgbar button.on{background:#3F3F3F;color:#fff}.pl-imgbar button.red{color:#B9052D}' +
     '.pl-ren{position:fixed;z-index:80;box-sizing:border-box;border:1px solid #B9052D;border-radius:5px;padding:0 10px;font:inherit;font-size:13px;color:var(--text-primary);background:var(--surface-page);outline:none;box-shadow:0 4px 14px rgba(0,0,0,.14)}' +
     '.kb-subnav::-webkit-scrollbar{height:0}[data-kb-sub][draggable="true"]{cursor:grab}' +
     '.pl-plab{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;letter-spacing:.05em;color:var(--text-muted);text-transform:uppercase;grid-column:1/-1}' +
