@@ -11,7 +11,7 @@
     overview: { label: 'Genel bakış', icon: 'over' },
     board: { label: 'Görev panosu', icon: 'board', desc: 'Günlük görev takibi (Kanban)' },
     timeline: { label: 'Proje zaman çizelgesi', icon: 'time', desc: 'Gantt ve V-döngüsü: fazlar, iş paketleri, kilometre taşları' },
-    guide: { label: 'Tasarım rehberi', icon: 'guide', desc: 'Sistem ve komponent kartları: gereksinimler, kurallar, clearance' },
+    guide: { label: 'Sistem Tasarımı', icon: 'guide', desc: 'Sistem ve komponent kartları: gereksinimler, kurallar, clearance' },
     note: { label: 'Boş sayfa', icon: 'page', desc: 'Notlar, toplantı tutanakları, kararlar' }
   };
   var TEMPLATES = ['board', 'timeline', 'guide', 'note'];
@@ -435,7 +435,7 @@
     if (!selId || !p.components.some(function (k) { return k.id === selId; })) selId = UI.dg[pid] = (comps[0] || p.components[0] || {}).id;
     var h = '<div class="pl-in">' + (E ? '<div class="pl-tools"><span class="pl-sp"></span><button type="button" class="pl-btn sm" data-pa="modal" data-m="systems">Sistemler</button><button type="button" class="pl-btn sm pri" data-pa="addcomp">+ Komponent kartı</button></div>' : '');
     if (!p.components.length) {
-      h += '<div class="pl-empty"><b>Tasarım rehberi boş.</b><span>' + (p.systems.length ? 'Her komponent için gereksinimleri, tasarım kurallarını, clearance değerlerini ve standartları tek kartta topla.' : 'Önce projedeki sistemleri ekle, sonra her sistemin komponentleri için kart oluştur.') + '</span>' + (E ? (p.systems.length ? '<button type="button" class="pl-btn pri" data-pa="addcomp">İlk komponent kartını ekle</button>' : '<button type="button" class="pl-btn pri" data-pa="modal" data-m="systems">Sistem ekle</button>') : '') + '</div></div>';
+      h += '<div class="pl-empty"><b>Sistem Tasarımı sayfası boş.</b><span>' + (p.systems.length ? 'Her komponent için gereksinimleri, tasarım kurallarını, clearance değerlerini ve standartları tek kartta topla.' : 'Önce projedeki sistemleri ekle, sonra her sistemin komponentleri için kart oluştur.') + '</span>' + (E ? (p.systems.length ? '<button type="button" class="pl-btn pri" data-pa="addcomp">İlk komponent kartını ekle</button>' : '<button type="button" class="pl-btn pri" data-pa="modal" data-m="systems">Sistem ekle</button>') : '') + '</div></div>';
       return h;
     }
     h += '<div class="pl-dg"><div class="pl-dgl">';
