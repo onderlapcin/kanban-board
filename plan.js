@@ -68,6 +68,8 @@
   function norm(d, pid) {
     d = d || {};
     var o = { projectId: pid, info: d.info || {}, roles: d.roles || {}, systems: d.systems || [], wps: d.wps || [], phases: d.phases || [], milestones: d.milestones || [], vcycle: d.vcycle || {}, components: d.components || [], pages: d.pages || [] };
+    o.wps.forEach(function (w) { if (isYM(w.start)) w.start = w.start + '-01'; if (isYM(w.end)) w.end = lastOfMonth(w.end); if (w.start && w.end && w.end < w.start) w.end = addDays(w.start, 6); });
+    o.phases.forEach(function (x) { if (isYM(x.start)) x.start = x.start + '-01'; if (isYM(x.end)) x.end = addDays(x.end + '-01', -1); if (x.start && x.end && x.end < x.start) x.end = lastOfMonth(x.start.slice(0, 7)); });
     o.components.forEach(function (k) { k.reqs = k.reqs || []; k.rules = k.rules || []; k.clear = k.clear || []; k.std = k.std || []; });
     return o;
   }
@@ -205,6 +207,16 @@
     return '<span class="pl-av" title="' + esc(pname(id)) + '" style="width:' + size + 'px;height:' + size + 'px;background:' + c[0] + ';color:' + c[1] + ';font-size:' + Math.round(size * .38) + 'px">' + esc(ini(pname(id))) + '</span>';
   }
   function pill(o) { return '<span class="pl-pill" style="background:' + o.bg + ';color:' + o.fg + '">' + esc(o.l) + '</span>'; }
+  // gün bazlı tarih yardımcıları (iş paketi ve faz tarihleri YYYY-MM-DD; bitiş dahil)
+  function dParse(v) { var p = String(v).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +(p[2] || 1))); }
+  function dFmt(d) { return d.toISOString().slice(0, 10); }
+  function addDays(v, n) { var d = dParse(v); d.setUTCDate(d.getUTCDate() + n); return dFmt(d); }
+  function dDiff(a, b) { return Math.round((dParse(b) - dParse(a)) / 864e5); }
+  function isYM(v) { return /^\d{4}-\d{2}$/.test(v || ''); }
+  function lastOfMonth(ym) { var p = ym.split('-'); return dFmt(new Date(Date.UTC(+p[0], +p[1], 0))); }
+  function mondayOf(v) { return addDays(v, -((dParse(v).getUTCDay() + 6) % 7)); }
+  function isoW(v) { var t = dParse(v), dn = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - dn); var y1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y1) / 864e5 + 1) / 7); }
+  function fmtR(a, b) { if (!a) return ''; return fmtDs(a) + (a.slice(0, 4) !== (b || a).slice(0, 4) ? ' ' + a.slice(0, 4) : '') + ' – ' + fmtDs(b || a) + ' ' + (b || a).slice(0, 4); }
   function mIdx(ym) { var p = String(ym).split('-'); return (+p[0]) * 12 + (+p[1] - 1); }
   function fmtM(ym) { if (!ym) return '—'; var p = ym.split('-'); return MON[+p[1] - 1] + ' ' + p[0]; }
   function fmtD(d) { if (!d) return '—'; var p = d.split('-'); return (+p[2]) + ' ' + MON[+p[1] - 1] + ' ' + p[0]; }
@@ -279,10 +291,10 @@
         h += card(pg, stack(pid, s.c, s.total) + (up.length ? '<div class="pl-list">' + up.map(function (t) { return taskRow(t, pid); }).join('') + '</div>' : '<div class="pl-muted">Açık görev yok.</div>'));
       } else if (pg.type === 'timeline') {
         var T = todayStr().slice(0, 7);
-        var cur = p.phases.find(function (x) { return x.start && x.end && x.start <= T && T < x.end; }) || p.phases.find(function (x) { return x.name === p.info.phase; });
+        var TD = todayStr(), cur = p.phases.find(function (x) { return x.start && x.end && x.start <= TD && TD <= x.end; }) || p.phases.find(function (x) { return x.name === p.info.phase; });
         var body = '';
-        if (cur) { var pc = Math.max(0, Math.min(100, Math.round((mIdx(T) + dayFrac(todayStr()) - mIdx(cur.start)) / Math.max(1, mIdx(cur.end) - mIdx(cur.start)) * 100)));
-          body += '<div><div class="pl-row sm"><span>Faz: <b>' + esc(cur.name) + '</b> (' + fmtM(cur.start) + ' – ' + fmtM(cur.end) + ')</span><b>%' + pc + '</b></div><div class="pl-bar"><span style="width:' + pc + '%;background:' + (cur.color || '#B9052D') + '"></span></div></div>'; }
+        if (cur && cur.start && cur.end) { var pc = Math.max(0, Math.min(100, Math.round(dDiff(cur.start, TD) / Math.max(1, dDiff(cur.start, cur.end) + 1) * 100)));
+          body += '<div><div class="pl-row sm"><span>Faz: <b>' + esc(cur.name) + '</b> (' + fmtR(cur.start, cur.end) + ')</span><b>%' + pc + '</b></div><div class="pl-bar"><span style="width:' + pc + '%;background:' + (cur.color || '#B9052D') + '"></span></div></div>'; }
         var ms = p.milestones.slice().sort(function (a, b) { return (a.date || '') < (b.date || '') ? -1 : 1; }).slice(0, 4);
         body += ms.length ? '<div class="pl-list">' + ms.map(function (m) { return '<div class="pl-it"><span class="pl-chip' + (m.done ? ' ok' : '') + '">' + esc(m.code || '◆') + '</span><span class="pl-t"><b>' + esc(m.name || '') + '</b></span><span class="pl-muted sm">' + fmtD(m.date) + '</span></div>'; }).join('') + '</div>' : '<div class="pl-muted">Faz, iş paketi ve kilometre taşları henüz eklenmedi.</div>';
         h += card(pg, body);
@@ -311,7 +323,7 @@
     }).join('') : '<div class="pl-muted">Ekip yok.</div>') + '</div></div>';
     h += '<div class="pl-box">' + secT('Kapsamımız: iş paketleri', editBtn('wps', p.wps.length ? 'Düzenle' : '+ Ekle', pid)) + (p.wps.length ? '<div class="pl-list">' + p.wps.map(function (w) {
       var nt = tasksOf(pid).filter(function (t) { return t.wp === w.id && t.status !== doneId(pid); }).length;
-      return '<div class="pl-it"><span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="pl-t"><b>' + esc(w.name || '') + '</b><small>' + (w.start ? fmtM(w.start) + ' – ' + fmtM(w.end) + ' · ' : '') + esc(pname(w.owner)) + (nt ? ' · ' + nt + ' açık görev' : '') + '</small><span class="pl-bar"><span style="width:' + (+w.pct || 0) + '%"></span></span></span><b class="sm nowrap">%' + (+w.pct || 0) + '</b></div>';
+      return '<div class="pl-it"><span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="pl-t"><b>' + esc(w.name || '') + '</b><small>' + (w.start ? fmtR(w.start, w.end) + ' · ' : '') + esc(pname(w.owner)) + (nt ? ' · ' + nt + ' açık görev' : '') + '</small><span class="pl-bar"><span style="width:' + (+w.pct || 0) + '%"></span></span></span><b class="sm nowrap">%' + (+w.pct || 0) + '</b></div>';
     }).join('') + '</div>' : '<div class="pl-muted">Projede yapmakla görevli olduğumuz işleri (iş paketleri) ekle.</div>' + (E ? '<div class="pl-row g8"><button type="button" class="pl-btn sm" data-pa="wpsStd">Hazır iş paketlerini ekle</button><span class="pl-muted sm">Mimari, paketleme, simülasyon, komponent tasarımı, DFMEA, prototip/test</span></div>' : '')) + '</div></div>';
     // sistemler
     h += '<div class="pl-box">' + secT('Sistemler', editBtn('systems', p.systems.length ? 'Düzenle' : '+ Ekle', pid)) + (p.systems.length ? '<div class="pl-scroll"><table class="pl-tbl"><thead><tr><th>Sistem</th><th>Sorumlu</th><th class="num">Komponent</th><th class="num">Açık görev</th><th>Tasarım durumu</th></tr></thead><tbody>' + p.systems.map(function (sy) {
@@ -366,12 +378,11 @@
       var d0 = new Date(Math.floor(m0 / 12), m0 % 12, 1), dEnd = new Date(Math.floor(m1 / 12), m1 % 12, 1);
       var dd = new Date(d0); dd.setDate(dd.getDate() - ((dd.getDay() + 6) % 7));   // haftanın pazartesisi
       function dstr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-      function isoW(d) { var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); var dn = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - dn); var y1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y1) / 864e5 + 1) / 7); }
       for (; dd < dEnd; dd.setDate(dd.getDate() + 7)) {
         var a1 = Math.max(0, xd(dstr(dd))), nx = new Date(dd); nx.setDate(nx.getDate() + 7);
         var b1 = nx >= dEnd ? W : xd(dstr(nx)); if (b1 - a1 < 14) continue;
         var now = todayStr() >= dstr(dd) && todayStr() < dstr(nx);
-        weeks += '<span class="g-wk' + (now ? ' now' : '') + '"' + (now ? ' title="Bu hafta"' : '') + ' style="left:' + P(a1) + ';width:' + P(b1 - a1) + '">H' + isoW(dd) + '</span>';
+        weeks += '<span class="g-wk' + (now ? ' now' : '') + '"' + (now ? ' title="Bu hafta"' : '') + ' style="left:' + P(a1) + ';width:' + P(b1 - a1) + '">H' + isoW(dstr(dd)) + '</span>';
         if (a1 > 0) wlines += '<i style="left:' + P(a1) + '"></i>';
       }
     }
@@ -381,22 +392,23 @@
     function row(lab, cls, inner, dk, id, grp) { return '<div class="g-lab ' + cls + '"' + (dk ? ' data-gk="' + dk + '" data-gid="' + esc(id) + '" data-grp="' + esc(grp || '') + '"' + (DR ? ' draggable="true"' : '') : (grp != null ? ' data-gk="grp" data-grp="' + esc(grp) + '"' : '')) + '>' + (dk && DR ? '<span class="g-grip" aria-hidden="true">⋮⋮</span>' : '') + lab + '</div><div class="g-tl ' + cls + '"><div class="g-grid">' + grid + '</div>' + (wlines ? '<div class="g-wl">' + wlines + '</div>' : '') + today + inner + '</div>'; }
     function bar(w, color) {
       if (!w.start) return '';
-      var a = x(w.start), b = x(w.end || w.start, 1);
-      return '<div class="g-bar' + (DR ? ' g-ed' : '') + '" data-bk="wp" data-bid="' + esc(w.id) + '" data-s="' + esc(w.start) + '" data-e="' + esc(w.end || w.start) + '" title="' + esc((w.code ? w.code + ' · ' : '') + (w.name || '') + ' · %' + (+w.pct || 0) + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + color + '"><span class="fill" style="width:' + (+w.pct || 0) + '%"></span><span class="tx">' + (b - a > 110 ? esc(pname(w.owner)) : '') + '</span>' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>';
+      var a = xd(w.start), b = xd(addDays(w.end || w.start, 1));
+      return '<div class="g-bar' + (DR ? ' g-ed' : '') + '" data-bk="wp" data-bid="' + esc(w.id) + '" data-s="' + esc(w.start) + '" data-e="' + esc(w.end || w.start) + '" title="' + esc((w.code ? w.code + ' · ' : '') + (w.name || '') + ' · %' + (+w.pct || 0) + ' · ' + fmtR(w.start, w.end) + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır (haftalık)' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + color + '"><span class="fill" style="width:' + (+w.pct || 0) + '%"></span><span class="tx">' + (b - a > 110 ? esc(pname(w.owner)) : '') + '</span>' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>';
     }
     function wpRow(w, color, grp) { return row('<span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="g-nm">' + esc(w.name || '') + '</span><small>%' + (+w.pct || 0) + '</small>', 'wp', bar(w, color), 'wp', w.id, grp); }
-    var h = '<div class="gantt"><div class="g-wrap"><div class="g-tbl" data-m0="' + m0 + '" data-nm="' + nm + '" style="grid-template-columns:max-content minmax(' + W + 'px,1fr)">';
+    var gs = Math.floor(m0 / 12) + '-' + String(m0 % 12 + 1).padStart(2, '0') + '-01', ge = Math.floor(m1 / 12) + '-' + String(m1 % 12 + 1).padStart(2, '0') + '-01';
+    var h = '<div class="gantt"><div class="g-wrap"><div class="g-tbl" data-gs="' + gs + '" data-ge="' + ge + '" style="grid-template-columns:max-content minmax(' + W + 'px,1fr)">';
     h += '<div class="g-lab g-head' + (weeks ? ' wk' : '') + '">Faz / iş paketi</div><div class="g-tl g-head' + (weeks ? ' wk' : '') + '"><div class="g-months">' + months + '</div>' + (weeks ? '<div class="g-weeks">' + weeks + '</div>' : '') + (showT ? '<div class="g-today-l" style="left:' + P(tx) + '">BUGÜN</div>' : '') + '</div>';
     if (p.milestones.length) h += row('Kilometre taşları', 'ph', p.milestones.filter(function (m) { return m.date; }).map(function (m) { var xx = xd(m.date); return '<span class="g-ms" title="' + esc((m.code ? m.code + ' · ' : '') + (m.name || '') + ' · ' + fmtD(m.date)) + '" style="left:' + P(xx) + ';background:' + (m.done ? '#2E8B57' : 'var(--surface-page)') + '"></span><span class="g-ms-l" style="left:calc(' + P(xx) + ' + 12px)">' + esc(m.code || m.name || '') + '</span>'; }).join(''));
     var used = {};
     p.phases.forEach(function (ph) {
       var c = ph.color || '#797979';
-      var a = ph.start ? x(ph.start) : 0, b = ph.end ? x(ph.end) : a;
-      h += row('<span class="pl-sw" style="background:' + c + '"></span>' + esc(ph.name || '') + '<small>' + (ph.start ? fmtM(ph.start) + ' – ' + fmtM(ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase' + (DR ? ' g-ed' : '') + '" data-bk="phase" data-bid="' + esc(ph.id) + '" data-s="' + esc(ph.start) + '" data-e="' + esc(ph.end || ph.start) + '" title="' + esc((ph.name || '') + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + c + '">' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>' : '', 'phase', ph.id, ph.id);
+      var a = ph.start ? xd(ph.start) : 0, b = ph.end ? xd(addDays(ph.end, 1)) : a;
+      h += row('<span class="pl-sw" style="background:' + c + '"></span>' + esc(ph.name || '') + '<small>' + (ph.start ? fmtR(ph.start, ph.end) : '') + '</small>', 'ph', ph.start ? '<div class="g-bar phase' + (DR ? ' g-ed' : '') + '" data-bk="phase" data-bid="' + esc(ph.id) + '" data-s="' + esc(ph.start) + '" data-e="' + esc(ph.end || ph.start) + '" title="' + esc((ph.name || '') + (DR ? ' · Kenarlardan çekerek uzat/kısalt, ortadan tutup kaydır' : '')) + '" style="left:' + P(a) + ';width:' + P(b - a) + ';background:' + c + '">' + (DR ? '<span class="g-h l" data-edge="s"></span><span class="g-h r" data-edge="e"></span>' : '') + '</div>' : '', 'phase', ph.id, ph.id);
       p.wps.forEach(function (w) {
         if (used[w.id]) return;
         var manual = w.phase && p.phases.some(function (x) { return x.id === w.phase; });
-        var hit = manual ? w.phase === ph.id : (w.start && ph.start && ph.end && w.start >= ph.start && w.start < ph.end);
+        var hit = manual ? w.phase === ph.id : (w.start && ph.start && ph.end && w.start >= ph.start && w.start <= ph.end);
         if (hit) { used[w.id] = 1; h += wpRow(w, c, ph.id); }
       });
     });
@@ -438,7 +450,7 @@
       var ts = tasksOf(pid).filter(function (t) { return ids.indexOf(t.wp) >= 0; });
       h += '<div class="pl-box">' + secT(n.l + ' · %' + vp.v) +
         (!vp.auto && canEdit(pid) ? '<label class="pl-row g8 sm">İlerleme (elle) <input type="number" min="0" max="100" class="pl-num" data-b="vcycle.' + n.id + '" data-t="num" value="' + vp.v + '"> %</label>' : '') +
-        (ws.length ? '<div class="pl-list">' + ws.map(function (w) { return '<div class="pl-it"><span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="pl-t"><b>' + esc(w.name || '') + '</b><small>' + esc(pname(w.owner)) + (w.start ? ' · ' + fmtM(w.start) + ' – ' + fmtM(w.end) : '') + '</small></span><b class="sm">%' + (+w.pct || 0) + '</b></div>'; }).join('') + '</div>' : '<div class="pl-muted">Bu adıma bağlı iş paketi yok. İş paketleri penceresinden "V-döngüsü adımı" seçerek bağlayabilirsin.</div>') +
+        (ws.length ? '<div class="pl-list">' + ws.map(function (w) { return '<div class="pl-it"><span class="pl-chip">' + esc(w.code || 'WP') + '</span><span class="pl-t"><b>' + esc(w.name || '') + '</b><small>' + esc(pname(w.owner)) + (w.start ? ' · ' + fmtR(w.start, w.end) : '') + '</small></span><b class="sm">%' + (+w.pct || 0) + '</b></div>'; }).join('') + '</div>' : '<div class="pl-muted">Bu adıma bağlı iş paketi yok. İş paketleri penceresinden "V-döngüsü adımı" seçerek bağlayabilirsin.</div>') +
         (ts.length ? '<div class="pl-list">' + ts.map(function (t) { return taskRow(t, pid); }).join('') + '</div>' : '') + '</div>';
     }
     return h;
@@ -623,9 +635,9 @@
     systems: { title: 'Sistemler', list: 'systems', add: function () { return { id: uid(), name: '', owner: '' }; },
       cols: [['name', 'Sistem adı', 'text', 'ör. Batarya termal yönetimi'], ['owner', 'Sorumlu', 'member']] },
     wps: { title: 'İş paketleri', list: 'wps', sortKey: 'start', sortLabel: 'Başlangıca göre sırala', add: function (p) { return { id: uid(), code: 'WP' + (p.wps.length + 1), name: '', owner: '', start: '', end: '', pct: 0, v: '' }; },
-      cols: [['code', 'Kod', 'text', 'WP1', 70], ['name', 'İş paketi', 'text', 'ör. 3B paketleme ve yerleşim'], ['owner', 'Sorumlu', 'member'], ['start', 'Başlangıç', 'month'], ['end', 'Bitiş', 'month'], ['pct', '%', 'num', '', 64], ['phase', 'Faz', 'phase'], ['v', 'V-döngüsü adımı', 'vstep']] },
+      cols: [['code', 'Kod', 'text', 'WP1', 70], ['name', 'İş paketi', 'text', 'ör. 3B paketleme ve yerleşim'], ['owner', 'Sorumlu', 'member'], ['start', 'Başlangıç', 'date'], ['end', 'Bitiş', 'date'], ['pct', '%', 'num', '', 64], ['phase', 'Faz', 'phase'], ['v', 'V-döngüsü adımı', 'vstep']] },
     phases: { title: 'Proje fazları', list: 'phases', sortKey: 'start', sortLabel: 'Başlangıca göre sırala', add: function () { return { id: uid(), name: '', start: '', end: '', color: '#0087A0' }; },
-      cols: [['name', 'Faz', 'text', 'ör. Detay tasarım'], ['start', 'Başlangıç', 'month'], ['end', 'Bitiş', 'month'], ['color', 'Renk', 'color']] },
+      cols: [['name', 'Faz', 'text', 'ör. Detay tasarım'], ['start', 'Başlangıç', 'date'], ['end', 'Bitiş', 'date'], ['color', 'Renk', 'color']] },
     milestones: { title: 'Kilometre taşları / gate\'ler', list: 'milestones', sortKey: 'date', sortLabel: 'Tarihe göre sırala', add: function () { return { id: uid(), code: '', name: '', date: '', done: false }; },
       cols: [['code', 'Kod', 'text', 'G3', 70], ['name', 'Ad', 'text', 'ör. Tasarım dondurma'], ['date', 'Tarih', 'date'], ['done', 'Tamamlandı', 'chk']] }
   };
@@ -707,7 +719,7 @@
       STD_WPS.forEach(function (x) {
         if (have[x[0].toLocaleLowerCase('tr')]) return;
         n++; added++;
-        p.wps.push({ id: uid(), code: 'WP' + n, name: x[0], owner: '', start: ym(s0 + x[2] * len), end: ym(s0 + Math.max(x[2] * len + 1, x[3] * len - 1)), pct: 0, v: x[1] });
+        p.wps.push({ id: uid(), code: 'WP' + n, name: x[0], owner: '', start: ym(s0 + x[2] * len) + '-01', end: lastOfMonth(ym(s0 + Math.max(x[2] * len + 1, x[3] * len - 1))), pct: 0, v: x[1] });
       });
     }, { render: true });
     toast(added ? added + ' hazır iş paketi eklendi' : 'Hazır iş paketlerinin hepsi zaten ekli');
@@ -815,7 +827,7 @@
     if (act === 'phasesStd') {
       var p0 = plan(pid), r = range(p0), s0 = mIdx(r[0]), len = Math.max(5, mIdx(r[1]) - s0), stp = len / 5;
       function ym(n) { n = Math.round(n); return Math.floor(n / 12) + '-' + String(n % 12 + 1).padStart(2, '0'); }
-      patch(pid, function (p) { STD_PHASES.forEach(function (x, i) { p.phases.push({ id: uid(), name: x[0], color: x[1], start: ym(s0 + i * stp), end: ym(s0 + (i + 1) * stp) }); }); }, { render: true });
+      patch(pid, function (p) { STD_PHASES.forEach(function (x, i) { p.phases.push({ id: uid(), name: x[0], color: x[1], start: ym(s0 + i * stp) + '-01', end: addDays(ym(s0 + (i + 1) * stp) + '-01', -1) }); }); }, { render: true });
       if (UI.modal) renderModal(); else openModal(pid, 'phases');
       return;
     }
@@ -1037,39 +1049,34 @@
 
   /* ---------- Gantt çubuklarını kenardan çekerek uzat / kısalt, ortadan kaydır ---------- */
   var bdrag = null, btip = null;
-  function ymOf(n) { return Math.floor(n / 12) + '-' + String(n % 12 + 1).padStart(2, '0'); }
-  function barRange(d, dm) {
-    var s = d.s, e = d.e, ph = d.kind === 'phase';
-    if (d.edge === 's') s = Math.min(s + dm, ph ? e - 1 : e);
-    else if (d.edge === 'e') e = Math.max(e + dm, ph ? s + 1 : s);
-    else { s += dm; e += dm; }
-    return [s, e];
-  }
   function barTip(txt, x, y) {
     if (!btip) { btip = document.createElement('div'); btip.className = 'pl-btip'; document.body.appendChild(btip); }
     btip.textContent = txt; btip.style.display = 'block'; btip.style.left = (x + 14) + 'px'; btip.style.top = (y - 34) + 'px';
   }
+  function nearMonday(v) { var m = mondayOf(v); return dDiff(m, v) >= 4 ? addDays(m, 7) : m; }   // en yakın hafta başı
   document.addEventListener('pointerdown', function (e) {
     var bar = e.target.closest && e.target.closest('.kb-plan-host .g-bar.g-ed'); if (!bar || e.button !== 0) return;
     var pid = pidOf(bar); if (!pid || !canEdit(pid)) return;
     var tbl = bar.closest('.g-tbl'), tl = bar.closest('.g-tl');
     e.preventDefault();
-    var edge = e.target.getAttribute('data-edge') || 'm';
-    bdrag = { pid: pid, bar: bar, kind: bar.getAttribute('data-bk'), id: bar.getAttribute('data-bid'), edge: edge, x0: e.clientX,
-      s: mIdx(bar.getAttribute('data-s')), e: mIdx(bar.getAttribute('data-e')), m0: +tbl.getAttribute('data-m0'), nm: +tbl.getAttribute('data-nm'), mpx: tl.clientWidth / (+tbl.getAttribute('data-nm')), dm: 0 };
+    var gs = tbl.getAttribute('data-gs'), ge = tbl.getAttribute('data-ge'), tot = Math.max(1, dDiff(gs, ge));
+    bdrag = { pid: pid, bar: bar, kind: bar.getAttribute('data-bk'), id: bar.getAttribute('data-bid'), edge: e.target.getAttribute('data-edge') || 'm', x0: e.clientX,
+      s: bar.getAttribute('data-s'), e: bar.getAttribute('data-e'), gs: gs, ge: ge, tot: tot, dpx: tl.clientWidth / tot, left: tl.getBoundingClientRect().left };
     try { bar.setPointerCapture(e.pointerId); } catch (x) {}
-    bar.classList.add('g-drag'); document.body.classList.add(edge === 'm' ? 'pl-moving' : 'pl-sizing');
+    bar.classList.add('g-drag'); document.body.classList.add(bdrag.edge === 'm' ? 'pl-moving' : 'pl-sizing');
   }, true);
   document.addEventListener('pointermove', function (e) {
     if (!bdrag) return;
-    var d = bdrag, dm = Math.round((e.clientX - d.x0) / d.mpx), r = barRange(d, dm);
-    var lo = d.m0, hi = d.m0 + d.nm - (d.kind === 'phase' ? 0 : 1);   // çizelge sınırı içinde kal
-    if (r[0] < lo) { var k = lo - r[0]; r = d.edge === 'm' ? [r[0] + k, r[1] + k] : [lo, r[1]]; }
-    if (r[1] > hi) { var k2 = r[1] - hi; r = d.edge === 'm' ? [r[0] - k2, r[1] - k2] : [r[0], hi]; }
-    d.r = r;
-    var w = d.kind === 'phase' ? r[1] - r[0] : r[1] - r[0] + 1;
-    d.bar.style.left = ((r[0] - d.m0) / d.nm * 100).toFixed(4) + '%'; d.bar.style.width = (w / d.nm * 100).toFixed(4) + '%';
-    barTip(fmtM(ymOf(r[0])) + ' – ' + fmtM(ymOf(r[1])), e.clientX, e.clientY);
+    var d = bdrag, s = d.s, en = d.e, last = addDays(d.ge, -1);
+    var at = addDays(d.gs, Math.round((e.clientX - d.left) / d.dpx));   // imlecin altındaki gün
+    if (d.edge === 'm') { var dw = Math.round((e.clientX - d.x0) / (d.dpx * 7)) * 7; s = addDays(d.s, dw); en = addDays(d.e, dw);
+      if (s < d.gs) { var k = dDiff(s, d.gs); s = addDays(s, k); en = addDays(en, k); }
+      if (en > last) { var k2 = dDiff(last, en); s = addDays(s, -k2); en = addDays(en, -k2); } }
+    else if (d.edge === 's') { s = nearMonday(at); if (s > addDays(en, -6)) s = mondayOf(addDays(en, -6)); if (s < d.gs) s = d.gs; }
+    else { en = addDays(nearMonday(at), -1); if (en < addDays(s, 6)) en = addDays(s, 6); if (en > last) en = last; }
+    d.r = [s, en];
+    d.bar.style.left = (dDiff(d.gs, s) / d.tot * 100).toFixed(4) + '%'; d.bar.style.width = ((dDiff(s, en) + 1) / d.tot * 100).toFixed(4) + '%';
+    barTip('H' + isoW(s) + ' – H' + isoW(en) + '  ·  ' + fmtR(s, en), e.clientX, e.clientY);
   }, true);
   function endBar(e) {
     if (!bdrag) return;
@@ -1077,7 +1084,7 @@
     try { d.bar.releasePointerCapture(e.pointerId); } catch (x) {}
     d.bar.classList.remove('g-drag'); document.body.classList.remove('pl-moving', 'pl-sizing'); if (btip) btip.style.display = 'none';
     if (!d.r || (d.r[0] === d.s && d.r[1] === d.e)) { refresh(true); return; }
-    var s = ymOf(d.r[0]), en = ymOf(d.r[1]);
+    var s = d.r[0], en = d.r[1];
     patch(d.pid, function (p) { var L = d.kind === 'phase' ? p.phases : p.wps, it = L.find(function (x) { return x.id === d.id; }); if (it) { it.start = s; it.end = en; } }, { render: true });
     if (UI.modal) renderModal();
   }
@@ -1089,7 +1096,7 @@
   function rClear() { document.querySelectorAll('.g-lab[data-gk],tr[data-mrow]').forEach(function (x) { x.style.boxShadow = ''; x.style.opacity = ''; }); }
   function groupOf(p, w) {
     if (w.phase && p.phases.some(function (x) { return x.id === w.phase; })) return w.phase;
-    var ph = p.phases.find(function (x) { return w.start && x.start && x.end && w.start >= x.start && w.start < x.end; });
+    var ph = p.phases.find(function (x) { return w.start && x.start && x.end && w.start >= x.start && w.start <= x.end; });
     return ph ? ph.id : '';
   }
   function move(list, from, to, before) {
