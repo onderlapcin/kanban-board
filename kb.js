@@ -790,6 +790,9 @@
       '.kb-rte-tb button:hover,.kb-rte-fl button:hover{background:var(--surface-muted)}' +
       '.kb-rte-tb .sep,.kb-rte-fl .sep{width:1px;height:18px;background:var(--border-default);margin:0 4px}' +
       '.kb-rte-ed{outline:none;word-break:break-word}' +
+      '.kb-rte-ed[data-kind="cmt"],.kb-rte-ed[data-kind="cmte"]{min-height:1.5em;padding:8px 12px;border:1px solid var(--border-default);border-radius:5px;font-size:13px;line-height:1.5;color:var(--text-primary);background:var(--surface-page)}.kb-rte-ed[data-kind="cmte"]{font-size:14px;min-height:4.5em}.kb-rte-ed[data-kind="cmt"]:focus,.kb-rte-ed[data-kind="cmte"]:focus{border-color:#B9052D}' +
+      '.kb-rte-ed ul,.kb-rte-ed ol,.kb-html-view ul,.kb-html-view ol{margin:4px 0;padding-left:22px}.kb-html-view a{color:#0087A0;text-decoration:underline;text-underline-offset:2px;word-break:break-all}html[data-theme="dark"] .kb-html-view a{color:#4FC3D6}' +
+      '.kb-html-view div[data-chk]{position:relative;padding-left:26px}.kb-html-view div[data-chk]::before{content:"";position:absolute;left:2px;top:.22em;width:14px;height:14px;border:1.5px solid var(--text-muted);border-radius:3px;box-sizing:border-box}.kb-html-view div[data-chk="1"]::before{background:#B9052D;border-color:#B9052D}.kb-html-view div[data-chk="1"]{color:var(--text-muted);text-decoration:line-through}' +
       '.kb-rte-ed[data-kind="desc"]{min-height:120px;border:1px solid var(--border-default);border-radius:0 0 5px 5px;padding:12px;font-size:14px;line-height:1.55;color:var(--text-primary);background:var(--surface-page)}' +
       '.kb-rte-ed[data-kind="desc"]:focus{border-color:#B9052D}' +
       '.kb-rte-ed[data-kind="desc"] ul,.kb-rte-ed[data-kind="desc"] ol{margin:4px 0;padding-left:22px}' +
@@ -975,6 +978,7 @@
 
     // kaydet
     function queueSave(ed, soon) {
+      if (!ed.__host) { ed.dispatchEvent(new Event('input', { bubbles: true })); return; }
       clearTimeout(ed.__t);
       ed.__t = setTimeout(function () { flush(ed); }, soon ? 50 : 500);
     }
@@ -1017,6 +1021,19 @@
         }
       });
       ed.addEventListener('keydown', function (e) {
+        if ((kind === 'cmt' || kind === 'cmte') && e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          var h0 = sanitize(ed.innerHTML), t0 = textOf(ed);
+          flush(ed);
+          try { if (api().enter) api().enter(kind, key, h0, t0); } catch (err) {}
+          if (kind === 'cmt' && t0.trim()) { ed.innerHTML = ''; host.__last = ''; }
+          return;
+        }
+        if ((kind === 'cmt' || kind === 'cmte') && e.key === 'Enter' && e.shiftKey) {
+          e.preventDefault();
+          try { if (!document.execCommand('insertLineBreak')) document.execCommand('insertHTML', false, '<br><br>'); } catch (err) {}
+          queueSave(ed); return;
+        }
         if (kind === 'sub' && e.key === 'Enter') {
           e.preventDefault();
           if (e.shiftKey) {   // Shift+Enter: aynı alt görevde yeni satır
@@ -1068,7 +1085,32 @@
         if (v !== host.__last) { host.__last = v; ed.innerHTML = v; }
       });
     };
-    new MutationObserver(function () { scan(); }).observe(document.documentElement, { childList: true, subtree: true });
+    function views() {
+      document.querySelectorAll('.kb-html-view').forEach(function (v) {
+        var h = v.getAttribute('data-html') || '';
+        if (v.__h !== h) { v.__h = h; v.innerHTML = sanitize(h); }
+      });
+    }
+    new MutationObserver(function () { scan(); views(); }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-html'] });
+    window.__kbSanitize = sanitize;
+    document.addEventListener('click', function (e) {
+      var a = e.target && e.target.closest && e.target.closest('.kb-rte-ed[data-kind="plan"] a'); if (!a) return;
+      var ed = a.closest('.kb-rte-ed');
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey || !ed.isContentEditable) { window.open(a.getAttribute('href'), '_blank', 'noopener'); return; }
+      openLinkBubble(a, ed);
+    });
+    document.addEventListener('mousedown', function (e) {
+      var t = e.target;
+      if (!(t && t.matches && t.matches('.kb-rte-ed[data-kind="plan"] div[data-chk]') && e.offsetX < 22)) return;
+      var ed = t.closest('.kb-rte-ed'); if (!ed.isContentEditable) return;
+      e.preventDefault(); t.setAttribute('data-chk', t.getAttribute('data-chk') === '1' ? '0' : '1');
+      ed.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    document.addEventListener('keydown', function (e) {
+      var ed = e.target && e.target.closest && e.target.closest('.kb-rte-ed[data-kind="plan"]'); if (!ed) return;
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); saveSel(); var rr = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).getBoundingClientRect() : ed.getBoundingClientRect(); if (!rr.width && !rr.height) rr = ed.getBoundingClientRect(); openLinkPop(rr); }
+    });
 
     // alt görevlerde seçince açılan çubuk
     function hideFl() { if (fl) fl.style.display = 'none'; }
@@ -1076,7 +1118,7 @@
       var s = window.getSelection();
       if (!s.rangeCount || s.isCollapsed) { hideFl(); return; }
       var ed = edOfSel();
-      if (!ed || ed.getAttribute('data-kind') !== 'sub') { hideFl(); return; }
+      if (!ed || !ed.isContentEditable || ed.getAttribute('data-kind') === 'desc') { hideFl(); return; }
       if (!fl) {
         fl = document.createElement('div'); fl.className = 'kb-rte-fl'; fl.setAttribute('role', 'toolbar'); fl.setAttribute('aria-label', 'Metin biçimlendirme');
         makeButtons(fl, false); document.body.appendChild(fl);
