@@ -771,6 +771,7 @@
             if (!/^https:\/\//i.test(src)) return;
             var im = document.createElement('img'); im.setAttribute('src', src); im.setAttribute('alt', String(n.getAttribute('alt') || '').slice(0, 200));
             var w = n.getAttribute('data-w'); if (/^[sml]$/.test(w || '')) im.setAttribute('data-w', w);
+            var pc = Math.round(+n.getAttribute('data-pct') || 0); if (pc >= 10 && pc <= 100) { im.setAttribute('data-pct', String(pc)); im.setAttribute('style', 'width:' + pc + '%'); }
             to.appendChild(im); return;
           }
           var el = document.createElement(tag);

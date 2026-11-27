@@ -925,33 +925,54 @@
     insertImages(ed, files, r);
   });
   var imgBar = null, imgSel = null;
-  function hideImgBar() { if (imgBar) imgBar.style.display = 'none'; if (imgSel) imgSel.classList.remove('pl-imgon'); imgSel = null; }
+  var imgH = null, rsz = null;
+  function curPct(im) { var p = +im.getAttribute('data-pct'); if (p) return p; var w = im.getAttribute('data-w'); return w === 's' ? 33 : w === 'm' ? 60 : 100; }
+  function setPct(im, p) { p = Math.max(10, Math.min(100, Math.round(p))); im.setAttribute('data-pct', String(p)); im.removeAttribute('data-w'); im.style.width = p + '%'; }
+  function hideImgBar() { if (imgBar) imgBar.style.display = 'none'; if (imgH) imgH.style.display = 'none'; if (imgSel) imgSel.classList.remove('pl-imgon'); imgSel = null; }
   function showImgBar(img) {
     hideImgBar(); imgSel = img; img.classList.add('pl-imgon');
     if (!imgBar) {
       imgBar = document.createElement('div'); imgBar.className = 'pl-imgbar'; imgBar.setAttribute('role', 'toolbar'); imgBar.setAttribute('aria-label', 'Görsel');
-      [['s', 'Küçük'], ['m', 'Orta'], ['l', 'Tam genişlik'], ['del', 'Sil']].forEach(function (b) {
+      [['33', 'Küçük'], ['60', 'Orta'], ['100', 'Tam genişlik'], ['del', 'Sil']].forEach(function (b) {
         var bt = document.createElement('button'); bt.type = 'button'; bt.textContent = b[1]; bt.setAttribute('data-w', b[0]); if (b[0] === 'del') bt.className = 'red';
         bt.addEventListener('mousedown', function (e) { e.preventDefault(); });
         bt.addEventListener('click', function () {
           var im = imgSel; if (!im) return; var ed = im.closest('.kb-rte-ed');
-          if (b[0] === 'del') { im.remove(); hideImgBar(); } else { im.setAttribute('data-w', b[0]); placeImgBar(); }
+          if (b[0] === 'del') { im.remove(); hideImgBar(); } else { setPct(im, +b[0]); placeImgBar(); }
           if (ed) ed.dispatchEvent(new Event('input', { bubbles: true }));
         });
         imgBar.appendChild(bt);
       });
       document.body.appendChild(imgBar);
     }
-    imgBar.style.display = 'flex'; placeImgBar();
+    if (!imgH) {
+      imgH = document.createElement('div'); imgH.className = 'pl-imgh'; imgH.title = 'Sürükleyerek boyutlandır'; imgH.setAttribute('aria-hidden', 'true');
+      imgH.addEventListener('pointerdown', function (e) {
+        if (!imgSel) return; e.preventDefault(); e.stopPropagation();
+        var ed = imgSel.closest('.kb-rte-ed'); rsz = { im: imgSel, ed: ed, left: imgSel.getBoundingClientRect().left, edW: ed.clientWidth || 1 };
+        try { imgH.setPointerCapture(e.pointerId); } catch (x) {}
+        document.body.classList.add('pl-resizing');
+      });
+      imgH.addEventListener('pointermove', function (e) {
+        if (!rsz) return;
+        setPct(rsz.im, (e.clientX - rsz.left) / rsz.edW * 100); placeImgBar();
+      });
+      function endR(e) { if (!rsz) return; var ed = rsz.ed; rsz = null; document.body.classList.remove('pl-resizing'); try { imgH.releasePointerCapture(e.pointerId); } catch (x) {} if (ed) ed.dispatchEvent(new Event('input', { bubbles: true })); }
+      imgH.addEventListener('pointerup', endR); imgH.addEventListener('pointercancel', endR);
+      document.body.appendChild(imgH);
+    }
+    imgBar.style.display = 'flex'; imgH.style.display = 'block'; placeImgBar();
   }
   function placeImgBar() {
     if (!imgBar || !imgSel) return;
     var r = imgSel.getBoundingClientRect(), w = imgBar.offsetWidth;
     imgBar.style.top = Math.max(8, r.top + 8) + 'px'; imgBar.style.left = Math.max(8, Math.min(r.left + 8, window.innerWidth - w - 8)) + 'px';
-    Array.prototype.forEach.call(imgBar.children, function (b) { b.classList.toggle('on', b.getAttribute('data-w') === (imgSel.getAttribute('data-w') || 'l')); });
+    var cp = curPct(imgSel);
+    Array.prototype.forEach.call(imgBar.children, function (b) { b.classList.toggle('on', +b.getAttribute('data-w') === cp); });
+    if (imgH) { imgH.style.left = (r.right - 8) + 'px'; imgH.style.top = (r.bottom - 8) + 'px'; imgH.setAttribute('data-pct', '%' + cp); }
   }
   document.addEventListener('click', function (e) {
-    if (imgBar && imgBar.contains(e.target)) return;
+    if ((imgBar && imgBar.contains(e.target)) || (imgH && imgH.contains(e.target))) return;
     var im = e.target.closest && e.target.closest('.kb-plan-host .pl-body[contenteditable="true"] img');
     if (im) { showImgBar(im); return; }
     hideImgBar();
@@ -1198,6 +1219,8 @@
     '.pl-poph{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);padding:8px 10px 4px}' +
     '.pl-pop button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;border-radius:5px;padding:8px 10px;text-align:left;cursor:pointer}.pl-pop button:hover:not(:disabled){background:var(--surface-subtle)}.pl-pop button:disabled{opacity:.45;cursor:default}.pl-pop button.red b{color:#B9052D}html[data-theme="dark"] .pl-pop button.red b{color:#F2557A}.pl-popsep{height:1px;background:var(--border-default);margin:4px 6px}' +
     '.pl-upl{display:block;margin:8px 0;padding:18px;border:1.5px dashed var(--border-default);border-radius:6px;color:var(--text-muted);font-size:13px;text-align:center}.pl-upl::after{content:"Görsel yükleniyor…"}' +
+    '.pl-imgh{position:fixed;z-index:71;display:none;width:16px;height:16px;border-radius:50%;background:#B9052D;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:nwse-resize;touch-action:none}.pl-imgh::after{content:attr(data-pct);position:absolute;left:20px;top:-4px;font-size:11px;font-weight:600;color:#fff;background:#3F3F3F;border-radius:3px;padding:1px 5px;white-space:nowrap}' +
+    'body.pl-resizing,body.pl-resizing *{cursor:nwse-resize!important;user-select:none!important}' +
     '.pl-body img{cursor:pointer}.pl-body img.pl-imgon{outline:2px solid #B9052D;outline-offset:2px}' +
     '.pl-imgbar{position:fixed;z-index:70;display:none;gap:2px;padding:4px;background:var(--surface-page);border:1px solid var(--border-default);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.18)}.pl-imgbar button{border:0;background:transparent;border-radius:4px;padding:5px 10px;font:inherit;font-size:12px;font-weight:600;color:var(--text-primary);cursor:pointer}.pl-imgbar button:hover{background:var(--surface-subtle)}.pl-imgbar button.on{background:#3F3F3F;color:#fff}.pl-imgbar button.red{color:#B9052D}' +
     '.pl-ren{position:fixed;z-index:80;box-sizing:border-box;border:1px solid #B9052D;border-radius:5px;padding:0 10px;font:inherit;font-size:13px;color:var(--text-primary);background:var(--surface-page);outline:none;box-shadow:0 4px 14px rgba(0,0,0,.14)}' +
