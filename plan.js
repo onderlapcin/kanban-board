@@ -620,6 +620,7 @@
     host.__seenT = setTimeout(function () { if (host.isConnected && host.getAttribute('data-sub') === sub && setSeen(pid, sub, Date.now())) rerenderApp(); }, 1500);
     host.__sig = sig; host.__dirty = false;
     if (!sameView) { host.scrollTop = 0; host.__view = pid + '|' + sub; }
+    fixColMin(host);
     var ng = host.querySelector('.g-wrap');
     if (ng) { if (sameView && gl != null) ng.scrollLeft = gl; else { var gt = host.querySelector('.g-today'), lab = host.querySelector('.g-lab'); if (gt) ng.scrollLeft = Math.max(0, gt.offsetLeft + (lab ? lab.offsetWidth : 0) - ng.clientWidth / 2); } }
   }
@@ -1227,17 +1228,28 @@
 
   /* ---------- Gantt: sol sütun genişliğini sürükleyerek ayarla (kişiye özel, tarayıcıda saklanır) ---------- */
   var colrs = null;
+  function colMin(g) {   // faz satırlarının tek satırda kalacağı en dar genişlik
+    g.classList.add('g-meas');
+    var m = 160; g.querySelectorAll('.g-lab.ph').forEach(function (l) { m = Math.max(m, Math.ceil(l.getBoundingClientRect().width) + 2); });
+    g.classList.remove('g-meas');
+    return Math.min(m, 720);
+  }
+  function fixColMin(host) {
+    var g = host.querySelector('.gantt'); if (!g || window.innerWidth <= 768) return;
+    var lab = g.querySelector('.g-lab'); if (!lab) return;
+    var mn = colMin(g); if (lab.getBoundingClientRect().width < mn) g.style.setProperty('--glw', mn + 'px');
+  }
   document.addEventListener('pointerdown', function (e) {
     var h = e.target.closest && e.target.closest('.kb-plan-host .g-colrs'); if (!h) return;
     e.preventDefault(); e.stopPropagation();
     var g = h.closest('.gantt'), lab = h.closest('.g-lab');
-    colrs = { g: g, x0: e.clientX, w0: lab.getBoundingClientRect().width };
+    colrs = { g: g, x0: e.clientX, w0: lab.getBoundingClientRect().width, min: colMin(g) };
     try { h.setPointerCapture(e.pointerId); } catch (x) {}
     document.body.classList.add('pl-colrs');
   }, true);
   document.addEventListener('pointermove', function (e) {
     if (!colrs) return;
-    var w = Math.max(160, Math.min(720, Math.round(colrs.w0 + e.clientX - colrs.x0)));
+    var w = Math.max(colrs.min, Math.min(720, Math.round(colrs.w0 + e.clientX - colrs.x0)));
     colrs.g.style.setProperty('--glw', w + 'px'); colrs.w = w;
   }, true);
   function endCol() { if (!colrs) return; var w = colrs.w; colrs = null; document.body.classList.remove('pl-colrs'); if (w) { try { localStorage.setItem('kb-glw', String(w)); } catch (x) {} } }
@@ -1317,6 +1329,7 @@
     '.gantt{--gwl:var(--border-default);--gdl:var(--border-default);--gwe:rgba(0,0,0,.035)}html[data-theme="dark"] .gantt{--gwe:rgba(255,255,255,.035)}' +
     '.g-wkl,.g-dyl{position:absolute;top:0;bottom:0;right:0;pointer-events:none}.g-dyl{-webkit-mask-image:repeating-linear-gradient(to bottom,#000 0,#000 3px,transparent 3px,transparent 6px);mask-image:repeating-linear-gradient(to bottom,#000 0,#000 3px,transparent 3px,transparent 6px);opacity:.8}' +
     '.pl-sw{width:8px;height:8px;border-radius:2px;flex-shrink:0}' +
+    '.g-meas .g-lab.ph{width:max-content!important}.g-meas .g-lab.ph .g-nm{white-space:nowrap;flex:none}' +
     '.g-colrs{position:absolute;top:0;bottom:0;right:-4px;width:8px;cursor:col-resize;z-index:5}.g-colrs::after{content:"";position:absolute;top:8px;bottom:8px;left:3px;width:2px;border-radius:1px;background:var(--border-strong);opacity:.6}.g-colrs:hover::after{background:#B9052D;opacity:1}body.pl-colrs,body.pl-colrs *{cursor:col-resize!important;user-select:none!important}' +
     '.g-bar.g-ed{cursor:grab;touch-action:none}.g-bar.g-drag{cursor:grabbing;box-shadow:0 2px 8px rgba(0,0,0,.25);z-index:2;opacity:.92}' +
     '.g-h{position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:1}.g-h.l{left:0}.g-h.r{right:0}.g-h::after{content:"";position:absolute;top:3px;bottom:3px;width:3px;border-radius:2px;background:rgba(255,255,255,.85);opacity:0;transition:opacity .1s}.g-h.l::after{left:2px}.g-h.r::after{right:2px}.g-bar.g-ed:hover .g-h::after,.g-bar.g-drag .g-h::after{opacity:1}' +
